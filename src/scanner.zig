@@ -19,7 +19,24 @@ pub const Scanner = struct {
 
     pub fn init(alloc: std.mem.Allocator, source: []const u8) !Self {
         return Self{ .source = source, .tokens = try .initCapacity(alloc, 42), .allocator = alloc, .ident_map = .initComptime(
-            .{ .{ "and", .AND }, .{ "class", .CLASS }, .{ "else", .ELSE }, .{ "false", .FALSE }, .{ "fun", .FUN }, .{ "for", .FOR }, .{ "if", .IF }, .{ "nil", .NIL }, .{ "or", .OR }, .{ "print", .PRINT }, .{ "return", .RETURN }, .{ "super", .SUPER }, .{ "this", .THIS }, .{ "true", .TRUE }, .{ "var", .VAR }, .{ "while", .WHILE } },
+            .{
+                .{ "and", .AND },
+                .{ "class", .CLASS },
+                .{ "else", .ELSE },
+                .{ "false", .FALSE },
+                .{ "fun", .FUN },
+                .{ "for", .FOR },
+                .{ "if", .IF },
+                .{ "nil", .NIL },
+                .{ "or", .OR },
+                .{ "print", .PRINT },
+                .{ "return", .RETURN },
+                .{ "super", .SUPER },
+                .{ "this", .THIS },
+                .{ "true", .TRUE },
+                .{ "var", .VAR },
+                .{ "while", .WHILE },
+            },
         ) };
     }
 
@@ -29,18 +46,17 @@ pub const Scanner = struct {
 
     pub fn scanTokens(self: *Self) !void {
         while (!self.isAtEnd()) {
-            self.start = self.current;
             try self.scanToken();
+            self.start = self.current;
         }
-        // TODO: do we need .EOF?
-        // try self.addToken(.EOF);
+        std.debug.assert(self.current == self.source.len);
+        try self.addToken(.EOF);
     }
 
     fn isAtEnd(self: *const Self) bool {
         return self.current >= self.source.len;
     }
 
-    // TODO: support comments
     fn scanToken(self: *Self) !void {
         const c = self.advance();
         switch (c) {
@@ -109,6 +125,15 @@ pub const Scanner = struct {
             '\n' => {
                 self.line += 1;
             },
+            '/' => {
+                if (self.matchAdvance('/')) {
+                    while (!self.isAtEnd() and self.peekUnchecked() != '\n') {
+                        self.advanceUnchecked();
+                    }
+                } else {
+                    try self.addToken(.SLASH);
+                }
+            },
 
             '\"' => {
                 try self.scanStringLiteral();
@@ -121,8 +146,8 @@ pub const Scanner = struct {
                     try self.scanIdentifierOrKeyWord();
                 } else {
                     const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
-                    const line: []const u8 = if (error_pos) |p| self.source[self.start .. self.start + p] else "Can't show error"[0..];
-                    std.debug.print("Error in line: {s}\n", .{line});
+                    const error_line: []const u8 = if (error_pos) |pos| self.source[self.start .. self.start + pos] else "Can't show error source";
+                    reportError(self.line, error_line, "Unexpected token");
                     return error.UnexpectedCharacter;
                 }
             },
@@ -225,6 +250,10 @@ pub const Scanner = struct {
         }
         return false;
     }
+
+    fn reportError(line: usize, where: []const u8, message: []const u8) void {
+        std.debug.print("Error: {s}\n{d} | {s}\n", .{ message, line, where });
+    }
 };
 
 test "Hello world!" {
@@ -251,4 +280,17 @@ test "Unterminated String Error" {
     defer scanner.deinit();
 
     try std.testing.expectError(error.UnterminatedString, scanner.scanTokens());
+}
+
+test "Comments" {
+    const allocator = std.testing.allocator;
+    const program: []const u8 = "// comment here <_> 42 67 69";
+
+    var scanner = try Scanner.init(allocator, program);
+    defer scanner.deinit();
+
+    try scanner.scanTokens();
+
+    try std.testing.expect(scanner.tokens.items.len == 1);
+    try std.testing.expect(Token.eql(scanner.tokens.items[0], Token.init(.EOF, "", 1)));
 }

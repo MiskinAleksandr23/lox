@@ -1,1 +1,6 @@
-print "Hello world";
+// commented text
+print "Hello world"; // some comments #
+
+var x = 1 / 2
+
+var y = x / x; // TODO: = 1
