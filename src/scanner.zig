@@ -121,7 +121,7 @@ pub const Scanner = struct {
                     try self.scanIdentifierOrKeyWord();
                 } else {
                     const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
-                    const line: []const u8 = if (error_pos) |p| self.source[self.start .. self.start + p] else "Can't show error"[0..]; // TODO: better comment
+                    const line: []const u8 = if (error_pos) |p| self.source[self.start .. self.start + p] else "Can't show error"[0..];
                     std.debug.print("Error in line: {s}\n", .{line});
                     return error.UnexpectedCharacter;
                 }
@@ -130,13 +130,12 @@ pub const Scanner = struct {
     }
 
     fn advance(self: *Self) u8 {
-        std.debug.assert(!self.isAtEnd()); // TODO: better error
-
-        const symbol = self.source[self.current];
-        self.current += 1;
+        std.debug.assert(!self.isAtEnd());
+        const symbol = self.peekUnchecked();
+        self.advanceUnchecked();
         return symbol;
     }
-    fn addToken(self: *Self, token: TokenType) !void {
+    inline fn addToken(self: *Self, token: TokenType) !void {
         try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.line));
     }
 
@@ -148,54 +147,56 @@ pub const Scanner = struct {
         return self.source[self.current];
     }
 
+    inline fn peekUnchecked(self: *Self) u8 {
+        return self.source[self.current];
+    }
+
+    inline fn advanceUnchecked(self: *Self) void {
+        self.current += 1;
+    }
+
     fn scanStringLiteral(self: *Self) !void {
-        while (self.peek() != '\"' and !self.isAtEnd()) {
-            if (self.peek() == '\n') {
+        while (!self.isAtEnd() and self.peekUnchecked() != '\"') {
+            if (self.peekUnchecked() == '\n') {
                 self.line += 1;
             }
-            _ = self.advance();
+            self.advanceUnchecked();
         }
         if (self.isAtEnd()) {
             @branchHint(.unlikely);
             return error.UnterminatedString;
         }
-
-        // Closing double quote
-        _ = self.advance();
-
+        self.advanceUnchecked();
         try self.addToken(.STRING);
     }
 
-    fn isAlpha(c: u8) bool {
+    inline fn isAlpha(c: u8) bool {
         return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c == '_');
     }
 
-    fn isDigit(c: u8) bool {
+    inline fn isDigit(c: u8) bool {
         return c >= '0' and c <= '9';
     }
 
-    fn isAlphaNumeric(c: u8) bool {
+    inline fn isAlphaNumeric(c: u8) bool {
         return isAlpha(c) or isDigit(c);
     }
 
-    // TODO: currently supporting only unsigned integers
     fn scanNumber(self: *Self) !void {
-        while (isDigit(self.peek())) {
-            _ = self.advance();
+        while (!self.isAtEnd() and isDigit(self.peekUnchecked())) {
+            self.advanceUnchecked();
         }
         try self.addToken(.NUMBER);
     }
 
     fn scanIdentifierOrKeyWord(self: *Self) !void {
-        while (isAlphaNumeric(self.peek())) {
-            _ = self.advance();
+        while (!self.isAtEnd() and isAlphaNumeric(self.peekUnchecked())) {
+            self.advanceUnchecked();
         }
         const ident = self.source[self.start..self.current];
         if (self.ident_map.get(ident)) |token_type| {
-            // KeyWord
             try self.addToken(token_type);
         } else {
-            // Identifier
             try self.addToken(.IDENTIFIER);
         }
     }
@@ -203,9 +204,12 @@ pub const Scanner = struct {
     /// If the current byte matches `expected`, consumes it and returns true.
     /// Otherwise, leaves the input unchanged and returns false.
     fn matchAdvance(self: *Self, expected: u8) bool {
-        std.debug.assert(self.current <= self.source.len);
-        if (self.peek() == expected) {
-            self.current += 1;
+        if (self.isAtEnd()) {
+            @branchHint(.unlikely);
+            return false;
+        }
+        if (self.peekUnchecked() == expected) {
+            self.advanceUnchecked();
             return true;
         }
         return false;
@@ -219,7 +223,6 @@ pub const Scanner = struct {
             self.current += pattern.len;
             return true;
         }
-
         return false;
     }
 };
