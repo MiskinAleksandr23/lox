@@ -75,32 +75,28 @@ pub const Scanner = struct {
                 try self.addToken(.STAR);
             },
             '=' => {
-                if (self.peek() == '=') {
-                    _ = self.advance();
+                if (self.matchAdvance('=')) {
                     try self.addToken(.EQUAL_EQUAL);
                 } else {
                     try self.addToken(.EQUAL);
                 }
             },
             '>' => {
-                if (self.peek() == '=') {
-                    _ = self.advance();
+                if (self.matchAdvance('=')) {
                     try self.addToken(.GREATER_EQUAL);
                 } else {
                     try self.addToken(.GREATER);
                 }
             },
             '<' => {
-                if (self.peek() == '=') {
-                    _ = self.advance();
+                if (self.matchAdvance('=')) {
                     try self.addToken(.LESS_EQUAL);
                 } else {
                     try self.addToken(.LESS);
                 }
             },
             '!' => {
-                if (self.peek() == '=') {
-                    _ = self.advance();
+                if (self.matchAdvance('=')) {
                     try self.addToken(.BANG_EQUAL);
                 } else {
                     try self.addToken(.BANG);
@@ -203,11 +199,34 @@ pub const Scanner = struct {
             try self.addToken(.IDENTIFIER);
         }
     }
+
+    /// If the current byte matches `expected`, consumes it and returns true.
+    /// Otherwise, leaves the input unchanged and returns false.
+    fn matchAdvance(self: *Self, expected: u8) bool {
+        std.debug.assert(self.current <= self.source.len);
+        if (self.peek() == expected) {
+            self.current += 1;
+            return true;
+        }
+        return false;
+    }
+
+    /// If the upcoming input matches `pattern`, consumes it and returns true.
+    /// Otherwise, leaves the input unchanged and returns false.
+    fn matchAdvancePattern(self: *Self, pattern: []const u8) bool {
+        const remaining = self.source[self.current..];
+        if (std.mem.startsWith(u8, remaining, pattern)) {
+            self.current += pattern.len;
+            return true;
+        }
+
+        return false;
+    }
 };
 
 test "Hello world!" {
     const allocator = std.testing.allocator;
-    const program: []const u8 = "print \"Hello World!\";"[0..];
+    const program: []const u8 = "print \"Hello World!\";";
 
     var scanner = try Scanner.init(allocator, program);
     defer scanner.deinit();
@@ -218,4 +237,15 @@ test "Hello world!" {
     try std.testing.expect(Token.eql(tokens[0], Token.init(.PRINT, "print", 1)));
     try std.testing.expect(Token.eql(tokens[1], Token.init(.STRING, "\"Hello World!\"", 1)));
     try std.testing.expect(Token.eql(tokens[2], Token.init(.SEMICOLON, ";", 1)));
+}
+
+test "Unterminated String Error" {
+    const allocator = std.testing.allocator;
+    const program: []const u8 =
+        "print \"Hello World!;";
+
+    var scanner = try Scanner.init(allocator, program);
+    defer scanner.deinit();
+
+    try std.testing.expectError(error.UnterminatedString, scanner.scanTokens());
 }
