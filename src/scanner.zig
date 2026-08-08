@@ -15,12 +15,12 @@ pub const Scanner = struct {
     current: usize = 0,
     line: usize = 1,
 
+    ident_map: std.StaticStringMap(TokenType),
+
     pub fn init(alloc: std.mem.Allocator, source: []const u8) !Self {
-        return Self{
-            .source = source,
-            .tokens = try .initCapacity(alloc, 42),
-            .allocator = alloc,
-        };
+        return Self{ .source = source, .tokens = try .initCapacity(alloc, 42), .allocator = alloc, .ident_map = .initComptime(
+            .{ .{ "and", .AND }, .{ "class", .CLASS }, .{ "else", .ELSE }, .{ "false", .FALSE }, .{ "fun", .FUN }, .{ "for", .FOR }, .{ "if", .IF }, .{ "nil", .NIL }, .{ "or", .OR }, .{ "print", .PRINT }, .{ "return", .RETURN }, .{ "super", .SUPER }, .{ "this", .THIS }, .{ "true", .TRUE }, .{ "var", .VAR }, .{ "while", .WHILE } },
+        ) };
     }
 
     pub fn deinit(self: *Self) void {
@@ -32,13 +32,15 @@ pub const Scanner = struct {
             self.start = self.current;
             try self.scanToken();
         }
-        try self.addToken(.EOF);
+        // TODO: do we need .EOF?
+        // try self.addToken(.EOF);
     }
 
     fn isAtEnd(self: *const Self) bool {
         return self.current >= self.source.len;
     }
 
+    // TODO: support comments
     fn scanToken(self: *Self) !void {
         const c = self.advance();
         switch (c) {
@@ -120,20 +122,22 @@ pub const Scanner = struct {
                 if (isDigit(c)) {
                     try self.scanNumber();
                 } else if (isAlpha(c)) {
-                    try self.scanIdentifier();
+                    try self.scanIdentifierOrKeyWord();
                 } else {
-                    std.debug.print("error in {s}\n: ", .{self.source[self.start .. self.start + 20]});
+                    const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
+                    const line: []const u8 = if (error_pos) |p| self.source[self.start .. self.start + p] else "Can't show error"[0..]; // TODO: better comment
+                    std.debug.print("Error in line: {s}\n", .{line});
                     return error.UnexpectedCharacter;
                 }
             },
         }
     }
 
-    // Precondition: !self.isEnd()
     fn advance(self: *Self) u8 {
+        std.debug.assert(!self.isAtEnd()); // TODO: better error
+
         const symbol = self.source[self.current];
         self.current += 1;
-
         return symbol;
     }
     fn addToken(self: *Self, token: TokenType) !void {
@@ -159,8 +163,10 @@ pub const Scanner = struct {
             @branchHint(.unlikely);
             return error.UnterminatedString;
         }
-        const closed = self.advance(); // TODO: rename
-        std.debug.assert(closed == '"'); // TODO: return error, not panic
+
+        // Closing double quote
+        _ = self.advance();
+
         try self.addToken(.STRING);
     }
 
@@ -176,6 +182,7 @@ pub const Scanner = struct {
         return isAlpha(c) or isDigit(c);
     }
 
+    // TODO: currently supporting only unsigned integers
     fn scanNumber(self: *Self) !void {
         while (isDigit(self.peek())) {
             _ = self.advance();
@@ -183,10 +190,32 @@ pub const Scanner = struct {
         try self.addToken(.NUMBER);
     }
 
-    fn scanIdentifier(self: *Self) !void {
+    fn scanIdentifierOrKeyWord(self: *Self) !void {
         while (isAlphaNumeric(self.peek())) {
             _ = self.advance();
         }
-        try self.addToken(.IDENTIFIER);
+        const ident = self.source[self.start..self.current];
+        if (self.ident_map.get(ident)) |token_type| {
+            // KeyWord
+            try self.addToken(token_type);
+        } else {
+            // Identifier
+            try self.addToken(.IDENTIFIER);
+        }
     }
 };
+
+test "Hello world!" {
+    const allocator = std.testing.allocator;
+    const program: []const u8 = "print \"Hello World!\";"[0..];
+
+    var scanner = try Scanner.init(allocator, program);
+    defer scanner.deinit();
+
+    try scanner.scanTokens();
+    const tokens: []const Token = scanner.tokens.items;
+
+    try std.testing.expect(Token.eql(tokens[0], Token.init(.PRINT, "print", 1)));
+    try std.testing.expect(Token.eql(tokens[1], Token.init(.STRING, "\"Hello World!\"", 1)));
+    try std.testing.expect(Token.eql(tokens[2], Token.init(.SEMICOLON, ";", 1)));
+}

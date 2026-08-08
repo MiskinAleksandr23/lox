@@ -61,4 +61,8 @@ pub const Token = struct {
     pub fn init(token_type: TokenType, lexeme: []const u8, line: usize) Self {
         return Self{ .token_type = token_type, .lexeme = lexeme, .line = line };
     }
+
+    pub fn eql(lhs: Token, rhs: Token) bool {
+        return lhs.line == rhs.line and lhs.token_type == rhs.token_type and std.mem.eql(u8, lhs.lexeme, rhs.lexeme);
+    }
 };
