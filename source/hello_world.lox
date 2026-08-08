@@ -1,0 +1,23 @@
+fun fib() {
+	var a = 0;
+	var b = 1;
+
+	fun calc() {
+		var c != b;
+		b = a+b;
+		a = c;
+
+		return a;
+	}
+
+	return calc;
+}
+
+var f = fib();
+
+print f();
+print f();
+print f();
+print f();
+print f();
+print f();

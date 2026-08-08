@@ -1,0 +1,64 @@
+const std = @import("std");
+const Io = std.Io;
+
+// https://craftinginterpreters.com/scanning.html
+pub const TokenType = enum {
+    LEFT_PAREN,
+    RIGHT_PAREN,
+    LEFT_BRACE,
+    RIGHT_BRACE,
+    COMMA,
+    DOT,
+    MINUS,
+    PLUS,
+    SEMICOLON,
+    SLASH,
+    STAR,
+
+    // One or two character tokens.
+    BANG,
+    BANG_EQUAL,
+    EQUAL,
+    EQUAL_EQUAL,
+    GREATER,
+    GREATER_EQUAL,
+    LESS,
+    LESS_EQUAL,
+
+    // Literals.
+    IDENTIFIER,
+    STRING,
+    NUMBER,
+
+    // Keywords.
+    AND,
+    CLASS,
+    ELSE,
+    FALSE,
+    FUN,
+    FOR,
+    IF,
+    NIL,
+    OR,
+    PRINT,
+    RETURN,
+    SUPER,
+    THIS,
+    TRUE,
+    VAR,
+    WHILE,
+
+    EOF,
+};
+
+pub const Token = struct {
+    const Self = @This();
+
+    token_type: TokenType,
+    lexeme: []const u8,
+    line: usize,
+
+    pub fn init(token_type: TokenType, lexeme: []const u8, line: usize) Self {
+        return Self{ .token_type = token_type, .lexeme = lexeme, .line = line };
+    }
+};
