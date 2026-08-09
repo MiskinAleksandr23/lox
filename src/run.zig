@@ -9,7 +9,7 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
 
     try scanner.scanTokens();
     for (scanner.tokens.items) |token| {
-        std.debug.print("{any}: {s}\n", .{ token.token_type, token.lexeme });
+        std.debug.print("{any}: {s}\n", .{ token.tokenType, token.lexeme });
     }
 }
 

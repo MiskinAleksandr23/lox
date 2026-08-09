@@ -54,15 +54,21 @@ pub const TokenType = enum {
 pub const Token = struct {
     const Self = @This();
 
-    token_type: TokenType,
+    tokenType: TokenType,
     lexeme: []const u8,
     line: usize,
 
     pub fn init(token_type: TokenType, lexeme: []const u8, line: usize) Self {
-        return Self{ .token_type = token_type, .lexeme = lexeme, .line = line };
+        return Self{
+            .tokenType = token_type,
+            .lexeme = lexeme,
+            .line = line,
+        };
     }
 
     pub fn eql(lhs: Token, rhs: Token) bool {
-        return lhs.line == rhs.line and lhs.token_type == rhs.token_type and std.mem.eql(u8, lhs.lexeme, rhs.lexeme);
+        return lhs.line == rhs.line and
+            lhs.tokenType == rhs.tokenType and
+            std.mem.eql(u8, lhs.lexeme, rhs.lexeme);
     }
 };

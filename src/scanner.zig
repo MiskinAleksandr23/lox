@@ -15,29 +15,34 @@ pub const Scanner = struct {
     current: usize = 0,
     line: usize = 1,
 
-    ident_map: std.StaticStringMap(TokenType),
+    identMap: std.StaticStringMap(TokenType),
 
     pub fn init(alloc: std.mem.Allocator, source: []const u8) !Self {
-        return Self{ .source = source, .tokens = try .initCapacity(alloc, 42), .allocator = alloc, .ident_map = .initComptime(
-            .{
-                .{ "and", .AND },
-                .{ "class", .CLASS },
-                .{ "else", .ELSE },
-                .{ "false", .FALSE },
-                .{ "fun", .FUN },
-                .{ "for", .FOR },
-                .{ "if", .IF },
-                .{ "nil", .NIL },
-                .{ "or", .OR },
-                .{ "print", .PRINT },
-                .{ "return", .RETURN },
-                .{ "super", .SUPER },
-                .{ "this", .THIS },
-                .{ "true", .TRUE },
-                .{ "var", .VAR },
-                .{ "while", .WHILE },
-            },
-        ) };
+        return Self{
+            .source = source,
+            .tokens = try .initCapacity(alloc, 42),
+            .allocator = alloc,
+            .identMap = .initComptime(
+                .{
+                    .{ "and", .AND },
+                    .{ "class", .CLASS },
+                    .{ "else", .ELSE },
+                    .{ "false", .FALSE },
+                    .{ "fun", .FUN },
+                    .{ "for", .FOR },
+                    .{ "if", .IF },
+                    .{ "nil", .NIL },
+                    .{ "or", .OR },
+                    .{ "print", .PRINT },
+                    .{ "return", .RETURN },
+                    .{ "super", .SUPER },
+                    .{ "this", .THIS },
+                    .{ "true", .TRUE },
+                    .{ "var", .VAR },
+                    .{ "while", .WHILE },
+                },
+            ),
+        };
     }
 
     pub fn deinit(self: *Self) void {
@@ -219,7 +224,7 @@ pub const Scanner = struct {
             self.advanceUnchecked();
         }
         const ident = self.source[self.start..self.current];
-        if (self.ident_map.get(ident)) |token_type| {
+        if (self.identMap.get(ident)) |token_type| {
             try self.addToken(token_type);
         } else {
             try self.addToken(.IDENTIFIER);
