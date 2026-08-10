@@ -58,9 +58,9 @@ pub const Token = struct {
     lexeme: []const u8,
     line: usize,
 
-    pub fn init(token_type: TokenType, lexeme: []const u8, line: usize) Self {
+    pub fn init(tokenType: TokenType, lexeme: []const u8, line: usize) Self {
         return Self{
-            .tokenType = token_type,
+            .tokenType = tokenType,
             .lexeme = lexeme,
             .line = line,
         };

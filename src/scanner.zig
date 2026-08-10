@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
+const ScanError = @import("errors.zig").ScanError;
 
 pub const Scanner = struct {
     const Self = @This();
@@ -49,7 +50,7 @@ pub const Scanner = struct {
         self.tokens.deinit(self.allocator);
     }
 
-    pub fn scanTokens(self: *Self) !void {
+    pub fn scanTokens(self: *Self) ScanError!void {
         while (!self.isAtEnd()) {
             try self.scanToken();
             self.start = self.current;
@@ -62,7 +63,7 @@ pub const Scanner = struct {
         return self.current >= self.source.len;
     }
 
-    fn scanToken(self: *Self) !void {
+    fn scanToken(self: *Self) ScanError!void {
         const c = self.advance();
         switch (c) {
             '(' => {
@@ -153,7 +154,7 @@ pub const Scanner = struct {
                     const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
                     const error_line: []const u8 = if (error_pos) |pos| self.source[self.start .. self.start + pos] else "Can't show error source";
                     reportError(self.line, error_line, "Unexpected token");
-                    return error.UnexpectedCharacter;
+                    return error.InvalidCharacter;
                 }
             },
         }
@@ -165,7 +166,7 @@ pub const Scanner = struct {
         self.advanceUnchecked();
         return symbol;
     }
-    inline fn addToken(self: *Self, token: TokenType) !void {
+    inline fn addToken(self: *Self, token: TokenType) ScanError!void {
         try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.line));
     }
 
@@ -185,7 +186,7 @@ pub const Scanner = struct {
         self.current += 1;
     }
 
-    fn scanStringLiteral(self: *Self) !void {
+    fn scanStringLiteral(self: *Self) ScanError!void {
         while (!self.isAtEnd() and self.peekUnchecked() != '\"') {
             if (self.peekUnchecked() == '\n') {
                 self.line += 1;
@@ -212,14 +213,14 @@ pub const Scanner = struct {
         return isAlpha(c) or isDigit(c);
     }
 
-    fn scanNumber(self: *Self) !void {
+    fn scanNumber(self: *Self) ScanError!void {
         while (!self.isAtEnd() and isDigit(self.peekUnchecked())) {
             self.advanceUnchecked();
         }
         try self.addToken(.NUMBER);
     }
 
-    fn scanIdentifierOrKeyWord(self: *Self) !void {
+    fn scanIdentifierOrKeyWord(self: *Self) ScanError!void {
         while (!self.isAtEnd() and isAlphaNumeric(self.peekUnchecked())) {
             self.advanceUnchecked();
         }

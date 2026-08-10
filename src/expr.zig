@@ -41,9 +41,9 @@ pub const Grouping = struct {
     expr: *const Expr,
 };
 
-const LiteralValue = union(enum) {
+pub const LiteralValue = union(enum) {
     boolean: bool,
-    integer: i64,
+    number: i64,
     string: []const u8,
 };
 
