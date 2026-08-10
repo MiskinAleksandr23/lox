@@ -58,6 +58,8 @@ pub const Interpreter = struct {
         switch (binary.operator.tokenType) {
             .PLUS => return try self.addValues(left, right),
             .MINUS, .STAR, .SLASH, .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL => return try self.handleNumbers(binary.operator.tokenType, left, right),
+            .EQUAL_EQUAL => return .{ .boolean = self.equalValues(left, right) },
+            .BANG_EQUAL => return .{ .boolean = !self.equalValues(left, right) },
             else => {},
         }
         return error.InvalidOperand;
@@ -119,6 +121,39 @@ pub const Interpreter = struct {
             else => self.failError(),
         };
     }
+    // Incorrect types ==> False
+    fn equalValues(self: *Self, left: Value, right: Value) bool {
+        _ = self;
+        switch (left) {
+            .number => |lhs| {
+                switch (right) {
+                    .number => |rhs| {
+                        return lhs == rhs;
+                    },
+                    else => return false,
+                }
+            },
+            .nil => {
+                switch (right) {
+                    .nil => return true,
+                    else => return false,
+                }
+            },
+            .string => |lhs| {
+                switch (right) {
+                    .string => |rhs| return std.mem.eql(u8, lhs, rhs),
+                    else => return false,
+                }
+            },
+            .boolean => |lhs| {
+                switch (right) {
+                    .boolean => |rhs| return lhs == rhs,
+                    else => return false,
+                }
+            },
+        }
+    }
+
     fn failError(self: *Self) RuntimeError {
         _ = self;
         // TODO: fix
