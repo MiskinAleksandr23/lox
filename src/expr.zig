@@ -41,14 +41,15 @@ pub const Grouping = struct {
     expr: *const Expr,
 };
 
-pub const LiteralValue = union(enum) {
+pub const Value = union(enum) {
+    nil,
     boolean: bool,
     number: i64,
     string: []const u8,
 };
 
 pub const Literal = struct {
-    value: LiteralValue,
+    value: Value,
 };
 
 pub const Logical = struct {

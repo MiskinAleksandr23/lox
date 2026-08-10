@@ -12,3 +12,9 @@ pub const ScanError = error{
     UnterminatedString,
     InvalidCharacter,
 };
+
+pub const RuntimeError = error{
+    InvalidOperand,
+    DivisionByZero,
+    OutOfMemory,
+};

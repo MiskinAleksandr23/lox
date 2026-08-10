@@ -180,6 +180,12 @@ pub const Parser = struct {
                     },
                 },
             });
+        } else if (self.match(.NIL)) {
+            return try self.allocExpr(.{
+                .literal = .{
+                    .value = .nil,
+                },
+            });
         } else if (self.match(.NUMBER)) {
             return try self.allocExpr(.{
                 .literal = .{
@@ -189,10 +195,11 @@ pub const Parser = struct {
                 },
             });
         } else if (self.match(.STRING)) {
+            const stringLen = self.previousUnchecked().lexeme.len;
             return try self.allocExpr(.{
                 .literal = .{
                     .value = .{
-                        .string = self.previousUnchecked().lexeme,
+                        .string = self.previousUnchecked().lexeme[1 .. stringLen - 1],
                     },
                 },
             });

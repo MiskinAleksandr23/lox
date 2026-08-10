@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const Scanner = @import("scanner.zig").Scanner;
 const Parser = @import("parser.zig").Parser;
+const Interpreter = @import("interpreter.zig").Interpreter;
 
 fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     _ = io;
@@ -14,7 +15,28 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     var parser: Parser = .init(tokens, alloc);
     const expr = try parser.expression();
 
-    std.debug.print("{any}", .{expr});
+    var interpreter: Interpreter = .init(alloc);
+    const result = try interpreter.evaluate(expr);
+
+    switch (result) {
+        .string => |string| {
+            std.debug.print("{any} evaluated to \"{s}\"", .{
+                expr, string,
+            });
+        },
+        .boolean => |boolean| {
+            std.debug.print("{any} evaluated to \"{any}\"", .{
+                expr, boolean,
+            });
+        },
+
+        .number => |number| {
+            std.debug.print("{any} evaluated to \"{d}\"", .{
+                expr, number,
+            });
+        },
+        else => {},
+    }
 }
 
 pub fn runFile(io: Io, alloc: std.mem.Allocator, path: []const u8) !void {
