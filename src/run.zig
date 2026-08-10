@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const Scanner = @import("scanner.zig").Scanner;
+const Parser = @import("parser.zig").Parser;
 
 fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     _ = io;
@@ -8,9 +9,12 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     errdefer scanner.deinit();
 
     try scanner.scanTokens();
-    for (scanner.tokens.items) |token| {
-        std.debug.print("{any}: {s}\n", .{ token.tokenType, token.lexeme });
-    }
+    const tokens = scanner.tokens.items;
+
+    var parser: Parser = .init(tokens, alloc);
+    const expr = parser.expression();
+
+    std.debug.print("{any}", .{expr});
 }
 
 pub fn runFile(io: Io, alloc: std.mem.Allocator, path: []const u8) !void {

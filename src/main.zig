@@ -1,7 +1,7 @@
 const std = @import("std");
 const run = @import("run.zig");
 const Scanner = @import("scanner.zig").Scanner;
-const AstPrinter = @import("visitors.zig").AstPrinter;
+const Parser = @import("parser.zig").Parser;
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;

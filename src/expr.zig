@@ -1,6 +1,4 @@
-const std = @import("std");
 const Token = @import("token.zig").Token;
-const TokenType = @import("token.zig").TokenType;
 
 pub const Expr = union(enum) {
     assign: Assign,
@@ -17,62 +15,68 @@ pub const Expr = union(enum) {
     variable: Variable,
 };
 
-const Assign = struct {
+pub const Assign = struct {
     token: Token,
-    value: *Expr,
+    value: *const Expr,
 };
 
-const Binary = struct {
-    left: *Expr,
-    operator: *Token,
-    right: *Expr,
+pub const Binary = struct {
+    left: *const Expr,
+    operator: Token,
+    right: *const Expr,
 };
 
-const Call = struct {
-    callee: *Expr,
+pub const Call = struct {
+    callee: *const Expr,
     paren: Token,
-    arguments: []*Expr,
+    arguments: []*const Expr,
 };
 
-const Get = struct {
-    object: *Expr,
+pub const Get = struct {
+    object: *const Expr,
     name: Token,
 };
 
-const Grouping = struct {
-    expression: *Expr,
+pub const Grouping = struct {
+    expr: *const Expr,
 };
 
-const Literal = struct {
-    value: []const u8,
+const LiteralValue = union(enum) {
+    boolean: bool,
+    integer: i64,
+    string: []const u8,
 };
 
-const Logical = struct {
-    left: *Expr,
-    operator: *Token,
-    right: *Expr,
+pub const Literal = struct {
+    value: LiteralValue,
 };
 
-const Set = struct {
-    object: *Expr,
+pub const Logical = struct {
+    left: *const Expr,
+    operator: Token,
+    right: *const Expr,
+};
+
+pub const Set = struct {
+    object: *const Expr,
     name: Token,
-    value: *Expr,
+    value: *const Expr,
 };
 
-const Super = struct {
+pub const Super = struct {
     keyword: Token,
     nethod: Token,
 };
 
-const This = struct {
+pub const This = struct {
     keyword: Token,
 };
 
-const Unary = struct {
+pub const Unary = struct {
     operator: Token,
-    right: *Expr,
+    right: *const Expr,
 };
 
-const Variable = struct {
+pub const Variable = struct {
     name: Token,
 };
