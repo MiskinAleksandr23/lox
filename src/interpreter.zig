@@ -70,16 +70,37 @@ pub const Interpreter = struct {
 
     fn evaluatePlus(self: *Self, operator: Token, left: Value, right: Value) InterpreterFailure!Value {
         return switch (left) {
-            .number => |lhs| .{
-                .number = lhs + try self.requireNumber(operator, left),
+            .number => |lhs| switch (right) {
+                .number => |rhs| .{
+                    .number = lhs + rhs,
+                },
+                .string => |rhs| .{ .string = try std.mem.concat(
+                    self.alloc,
+                    u8,
+                    &.{ try self.stringify(left), rhs },
+                ) },
+                // TODO: same as l91
+                else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be numbers or strings"),
             },
             .string => |lhs| .{
                 .string = try std.mem.concat(self.alloc, u8, &.{
                     lhs,
-                    try self.requireString(operator, right),
+                    try self.stringify(right),
                 }),
             },
-            else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be two numbers or two strings"),
+            else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be numbers or strings"),
+        };
+    }
+
+    fn stringify(self: *Self, value: Value) InterpreterFailure![]const u8 {
+        return switch (value) {
+            .number => |number| try std.fmt.allocPrint(
+                self.alloc,
+                "{d}",
+                .{number},
+            ),
+            .string => |string| string,
+            else => InterpreterFailure.InvalidOperand,
         };
     }
 
