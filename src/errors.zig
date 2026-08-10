@@ -1,20 +1,32 @@
-// TODO: do we need all errors in ParseError?
+const std = @import("std");
+
 pub const ParseError = error{
     InvalidSyntax,
-    OutOfMemory,
-    InvalidCharacter,
-    Overflow,
+    NumberLiteralOutOfRange,
 };
 
-// TODO: do we need all errors in ScanError?
+pub const ParserFailure =
+    ParseError || std.mem.Allocator.Error;
+
 pub const ScanError = error{
-    OutOfMemory,
     UnterminatedString,
     InvalidCharacter,
 };
 
+pub const ScannerError = ScanError || std.mem.Allocator.Error;
+
 pub const RuntimeError = error{
     InvalidOperand,
+    UndefinedVariable,
+    NotCallable,
+    ArityMismatch,
+    InvalidPropertyReceiver,
+    UndefinedProperty,
     DivisionByZero,
-    OutOfMemory,
+    IntegerOverflow,
+    Unimplemented, // Remove in future,
 };
+
+pub const InterpreterFailure =
+    RuntimeError ||
+    std.mem.Allocator.Error;

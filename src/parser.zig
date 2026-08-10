@@ -2,7 +2,7 @@ const std = @import("std");
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const Expr = @import("expr.zig").Expr;
-const ParseError = @import("errors.zig").ParseError;
+const ParserFailure = @import("errors.zig").ParserFailure;
 
 pub const Parser = struct {
     const Self = @This();
@@ -69,11 +69,11 @@ pub const Parser = struct {
     // primary        → NUMBER | STRING | "true" | "false" | "nil"
     //             | "(" expression ")" ;
 
-    pub fn expression(self: *Self) ParseError!*const Expr {
+    pub fn expression(self: *Self) ParserFailure!*const Expr {
         return self.equality();
     }
 
-    fn equality(self: *Self) ParseError!*const Expr {
+    fn equality(self: *Self) ParserFailure!*const Expr {
         var expr = try self.comparison();
 
         while (self.matchAny(&.{ .BANG_EQUAL, .EQUAL_EQUAL })) {
@@ -92,7 +92,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    fn comparison(self: *Self) ParseError!*const Expr {
+    fn comparison(self: *Self) ParserFailure!*const Expr {
         var expr = try self.term();
 
         while (self.matchAny(&.{ .GREATER, .GREATER_EQUAL, .LESS, .LESS_EQUAL })) {
@@ -111,7 +111,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    fn term(self: *Self) ParseError!*const Expr {
+    fn term(self: *Self) ParserFailure!*const Expr {
         var expr = try self.factor();
 
         while (self.matchAny(&.{ .MINUS, .PLUS })) {
@@ -129,7 +129,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    fn factor(self: *Self) ParseError!*const Expr {
+    fn factor(self: *Self) ParserFailure!*const Expr {
         var expr = try self.unary();
 
         while (self.matchAny(&.{ .SLASH, .STAR })) {
@@ -147,7 +147,7 @@ pub const Parser = struct {
         return expr;
     }
 
-    fn unary(self: *Self) ParseError!*const Expr {
+    fn unary(self: *Self) ParserFailure!*const Expr {
         if (self.matchAny(&.{ .BANG, .MINUS })) {
             const operator = self.previousUnchecked();
             const right = try self.unary();
@@ -163,7 +163,7 @@ pub const Parser = struct {
         return try self.primary();
     }
 
-    fn primary(self: *Self) ParseError!*const Expr {
+    fn primary(self: *Self) ParserFailure!*const Expr {
         if (self.match(.FALSE)) {
             return try self.allocExpr(.{
                 .literal = .{
@@ -190,7 +190,10 @@ pub const Parser = struct {
             return try self.allocExpr(.{
                 .literal = .{
                     .value = .{
-                        .number = try std.fmt.parseInt(i64, self.previousUnchecked().lexeme, 10),
+                        .number = std.fmt.parseInt(i64, self.previousUnchecked().lexeme, 10) catch |err| switch (err) {
+                            error.Overflow => return ParserFailure.NumberLiteralOutOfRange,
+                            error.InvalidCharacter => unreachable,
+                        },
                     },
                 },
             });
@@ -223,7 +226,7 @@ pub const Parser = struct {
         self.reportError(errorMessage);
     }
 
-    fn allocExpr(self: *Self, expr: Expr) ParseError!*const Expr {
+    fn allocExpr(self: *Self, expr: Expr) ParserFailure!*const Expr {
         const element = try self.alloc.create(Expr);
         element.* = expr;
         return element;

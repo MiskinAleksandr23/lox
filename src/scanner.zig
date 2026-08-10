@@ -1,7 +1,7 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
-const ScanError = @import("errors.zig").ScanError;
+const ScannerError = @import("errors.zig").ScannerError;
 
 pub const Scanner = struct {
     const Self = @This();
@@ -49,7 +49,7 @@ pub const Scanner = struct {
         self.tokens.deinit(self.allocator);
     }
 
-    pub fn scanTokens(self: *Self) ScanError!void {
+    pub fn scanTokens(self: *Self) ScannerError!void {
         while (!self.isAtEnd()) {
             try self.scanToken();
             self.start = self.current;
@@ -62,7 +62,7 @@ pub const Scanner = struct {
         return self.current >= self.source.len;
     }
 
-    fn scanToken(self: *Self) ScanError!void {
+    fn scanToken(self: *Self) ScannerError!void {
         const c = self.advance();
         switch (c) {
             '(' => {
@@ -165,7 +165,7 @@ pub const Scanner = struct {
         self.advanceUnchecked();
         return symbol;
     }
-    inline fn addToken(self: *Self, token: TokenType) ScanError!void {
+    inline fn addToken(self: *Self, token: TokenType) ScannerError!void {
         try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.line));
     }
 
@@ -185,7 +185,7 @@ pub const Scanner = struct {
         self.current += 1;
     }
 
-    fn scanStringLiteral(self: *Self) ScanError!void {
+    fn scanStringLiteral(self: *Self) ScannerError!void {
         while (!self.isAtEnd() and self.peekUnchecked() != '\"') {
             if (self.peekUnchecked() == '\n') {
                 self.line += 1;
@@ -212,14 +212,14 @@ pub const Scanner = struct {
         return isAlpha(c) or isDigit(c);
     }
 
-    fn scanNumber(self: *Self) ScanError!void {
+    fn scanNumber(self: *Self) ScannerError!void {
         while (!self.isAtEnd() and isDigit(self.peekUnchecked())) {
             self.advanceUnchecked();
         }
         try self.addToken(.NUMBER);
     }
 
-    fn scanIdentifierOrKeyword(self: *Self) ScanError!void {
+    fn scanIdentifierOrKeyword(self: *Self) ScannerError!void {
         while (!self.isAtEnd() and isAlphaNumeric(self.peekUnchecked())) {
             self.advanceUnchecked();
         }

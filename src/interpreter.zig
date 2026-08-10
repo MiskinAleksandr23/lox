@@ -1,13 +1,13 @@
 const std = @import("std");
-const Expr = @import("expr.zig").Expr;
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
+const Expr = @import("expr.zig").Expr;
 const Value = @import("expr.zig").Value;
-const RuntimeError = @import("errors.zig").RuntimeError;
 const Literal = @import("expr.zig").Literal;
 const Unary = @import("expr.zig").Unary;
 const Binary = @import("expr.zig").Binary;
 const Grouping = @import("expr.zig").Grouping;
+const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 
 pub const Interpreter = struct {
     const Self = @This();
@@ -19,109 +19,108 @@ pub const Interpreter = struct {
         };
     }
 
-    pub fn evaluate(self: *Self, expr: *const Expr) RuntimeError!Value {
+    pub fn evaluate(self: *Self, expr: *const Expr) InterpreterFailure!Value {
         return switch (expr.*) {
-            .literal => |literal| try self.evaluateLiteralExpr(literal),
-            .unary => |unary| try self.evaluateUnaryExpression(unary),
-            .binary => |binary| try self.evaluateBinaryExpression(binary),
-            .grouping => |grouping| try self.evaluateGroupingExpr(grouping),
-            else => RuntimeError.InvalidOperand,
+            .literal => |literal| self.evaluateLiteral(literal),
+            .unary => |unary| try self.evaluateUnary(unary),
+            .binary => |binary| try self.evaluateBinary(binary),
+            .grouping => |grouping| try self.evaluateGrouping(grouping),
+            else => return InterpreterFailure.Unimplemented,
         };
     }
 
-    fn evaluateLiteralExpr(self: *Self, literal: Literal) RuntimeError!Value {
-        _ = self;
+    fn evaluateLiteral(_: *Self, literal: Literal) Value {
         return literal.value;
     }
 
-    fn evaluateUnaryExpression(self: *Self, unary: Unary) RuntimeError!Value {
-        const internal = try self.evaluate(unary.right);
+    fn evaluateUnary(self: *Self, unary: Unary) InterpreterFailure!Value {
+        const value = try self.evaluate(unary.right);
 
-        if (unary.operator.tokenType == .MINUS) {
-            return switch (internal) {
+        return switch (unary.operator.tokenType) {
+            .MINUS => switch (value) {
                 .number => |number| .{ .number = -number },
-                else => RuntimeError.InvalidOperand,
-            };
-        } else if (unary.operator.tokenType == .BANG) {
-            return switch (internal) {
+                else => self.failRuntime(unary.operator, InterpreterFailure.InvalidOperand, "Operand must be a number"),
+            },
+            .BANG => switch (value) {
+                .number => .{ .boolean = false },
+                .nil => .{ .boolean = true },
                 .boolean => |boolean| .{ .boolean = !boolean },
-                else => RuntimeError.InvalidOperand,
-            };
-        }
-        return RuntimeError.InvalidOperand;
+                .string => .{ .boolean = false },
+            },
+            else => unreachable,
+        };
     }
 
-    fn evaluateBinaryExpression(self: *Self, binary: Binary) RuntimeError!Value {
-        const left = try self.evaluate(binary.left);
-        const right = try self.evaluate(binary.right);
-
-        switch (binary.operator.tokenType) {
-            .PLUS => return try self.addValues(left, right),
-            .MINUS, .STAR, .SLASH, .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL => return try self.handleNumbers(binary.operator.tokenType, left, right),
-            .EQUAL_EQUAL => return .{ .boolean = self.equalValues(left, right) },
-            .BANG_EQUAL => return .{ .boolean = !self.equalValues(left, right) },
-            else => {},
-        }
-        return error.InvalidOperand;
-    }
-    fn evaluateGroupingExpr(self: *Self, grouping: Grouping) RuntimeError!Value {
+    fn evaluateGrouping(self: *Self, grouping: Grouping) InterpreterFailure!Value {
         return try self.evaluate(grouping.expr);
     }
 
-    fn addValues(self: *Self, left: Value, right: Value) RuntimeError!Value {
-        return switch (left) {
-            .number => |lhs| switch (right) {
-                .number => |rhs| .{
-                    .number = lhs + rhs,
-                },
-                else => self.failError(),
-            },
-            .string => |lhs| switch (right) {
-                .string => |rhs| .{
-                    .string = try std.mem.concat(self.alloc, u8, &.{ lhs, rhs }),
-                },
-                else => self.failError(),
-            },
-            else => self.failError(),
+    fn evaluateBinary(self: *Self, binary: Binary) InterpreterFailure!Value {
+        const left = try self.evaluate(binary.left);
+        const right = try self.evaluate(binary.right);
+
+        return switch (binary.operator.tokenType) {
+            .PLUS => try self.evaluatePlus(binary.operator, left, right),
+            .MINUS, .STAR, .SLASH, .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL => try self.evaluateNumericBinary(binary.operator, left, right),
+            .EQUAL_EQUAL => .{ .boolean = self.equalValues(left, right) },
+            .BANG_EQUAL => .{ .boolean = !self.equalValues(left, right) },
+            else => InterpreterFailure.Unimplemented,
         };
     }
 
-    fn handleNumbers(self: *Self, operator: TokenType, left: Value, right: Value) RuntimeError!Value {
+    fn evaluatePlus(self: *Self, operator: Token, left: Value, right: Value) InterpreterFailure!Value {
         return switch (left) {
-            .number => |lhs| switch (right) {
-                .number => |rhs| switch (operator) {
-                    .PLUS => .{
-                        .number = lhs + rhs,
-                    },
-                    .MINUS => .{
-                        .number = lhs - rhs,
-                    },
-                    .STAR => .{
-                        .number = lhs * rhs,
-                    },
-                    .SLASH => .{
-                        .number = @divExact(lhs, rhs),
-                    },
-                    .LESS => .{
-                        .boolean = lhs < rhs,
-                    },
-                    .GREATER => .{
-                        .boolean = lhs > rhs,
-                    },
-                    .LESS_EQUAL => .{
-                        .boolean = lhs <= rhs,
-                    },
-                    .GREATER_EQUAL => .{
-                        .boolean = lhs >= rhs,
-                    },
-                    else => self.failError(),
-                },
-                else => self.failError(),
+            .number => |lhs| .{
+                .number = lhs + try self.requireNumber(operator, left),
             },
-            else => self.failError(),
+            .string => |lhs| .{
+                .string = try std.mem.concat(self.alloc, u8, &.{
+                    lhs,
+                    try self.requireString(operator, right),
+                }),
+            },
+            else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be two numbers or two strings"),
         };
     }
-    // Incorrect types ==> False
+
+    fn evaluateNumericBinary(self: *Self, operator: Token, left: Value, right: Value) InterpreterFailure!Value {
+        const lhs = try self.requireNumber(operator, left);
+        const rhs = try self.requireNumber(operator, right);
+
+        return switch (operator.tokenType) {
+            .PLUS => .{
+                .number = lhs + rhs,
+            },
+            .MINUS => .{
+                .number = lhs - rhs,
+            },
+            .STAR => .{
+                .number = lhs * rhs,
+            },
+            .SLASH => division: {
+                if (rhs == 0) {
+                    return self.failRuntime(operator, InterpreterFailure.DivisionByZero, "Division by zero");
+                }
+                break :division .{
+                    .number = @divTrunc(lhs, rhs),
+                };
+            },
+            .LESS => .{
+                .boolean = lhs < rhs,
+            },
+            .GREATER => .{
+                .boolean = lhs > rhs,
+            },
+            .LESS_EQUAL => .{
+                .boolean = lhs <= rhs,
+            },
+            .GREATER_EQUAL => .{
+                .boolean = lhs >= rhs,
+            },
+            else => InterpreterFailure.Unimplemented,
+        };
+    }
+
     fn equalValues(self: *Self, left: Value, right: Value) bool {
         _ = self;
         switch (left) {
@@ -154,9 +153,24 @@ pub const Interpreter = struct {
         }
     }
 
-    fn failError(self: *Self) RuntimeError {
+    fn failRuntime(self: *Self, token: Token, err: InterpreterFailure, errMessage: []const u8) InterpreterFailure {
+        _ = token;
         _ = self;
-        // TODO: fix
-        return error.InvalidOperand;
+        _ = errMessage;
+        return err;
+    }
+
+    fn requireNumber(self: *Self, operator: Token, value: Value) InterpreterFailure!i64 {
+        return switch (value) {
+            .number => |number| number,
+            else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operand must be a number"),
+        };
+    }
+
+    fn requireString(self: *Self, operator: Token, value: Value) InterpreterFailure![]const u8 {
+        return switch (value) {
+            .string => |string| string,
+            else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operand must be a string"),
+        };
     }
 };
