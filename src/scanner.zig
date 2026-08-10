@@ -55,7 +55,8 @@ pub const Scanner = struct {
             self.start = self.current;
         }
         std.debug.assert(self.current == self.source.len);
-        try self.addToken(.EOF);
+        // TODO: do we need .EOF?
+        // try self.addToken(.EOF);
     }
 
     fn isAtEnd(self: *const Self) bool {

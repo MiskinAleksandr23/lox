@@ -1,1 +1,1 @@
-"123" + 12
+print "Hello World!";

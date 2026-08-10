@@ -3,6 +3,7 @@ const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const Expr = @import("expr.zig").Expr;
 const ParserFailure = @import("errors.zig").ParserFailure;
+const Stmt = @import("stmt.zig").Stmt;
 
 pub const Parser = struct {
     const Self = @This();
@@ -59,6 +60,13 @@ pub const Parser = struct {
         return false;
     }
 
+    // program        → statement* EOF ;
+    // statement      →   exprStmt
+    //                  | printStmt;
+
+    // exprStmt       → expression ";" ;
+    // printStmt      → "print" expression ";" ;
+
     // expression     → equality ;
     // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
     // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -68,6 +76,42 @@ pub const Parser = struct {
     //             | primary ;
     // primary        → NUMBER | STRING | "true" | "false" | "nil"
     //             | "(" expression ")" ;
+
+    pub fn parse(self: *Self) ParserFailure![]*const Stmt {
+        var statements: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
+        while (!self.isAtEnd()) {
+            try statements.append(self.alloc, try self.statement());
+        }
+
+        return statements.items;
+    }
+
+    fn statement(self: *Self) ParserFailure!*const Stmt {
+        if (self.match(.PRINT)) {
+            return try self.printStatement();
+        }
+
+        return try self.expressionStatement();
+    }
+
+    fn printStatement(self: *Self) ParserFailure!*const Stmt {
+        const expr = try self.expression();
+        self.consume(.SEMICOLON, "Expect ';' after expression");
+
+        return self.allocStmt(.{
+            .printStmt = .{
+                .expr = expr.*,
+            },
+        });
+    }
+    fn expressionStatement(self: *Self) ParserFailure!*const Stmt {
+        const expr = try self.expression();
+        self.consume(.SEMICOLON, "Expect ';' after expression");
+
+        return try self.allocStmt(.{ .expr = .{
+            .expr = expr.*,
+        } });
+    }
 
     pub fn expression(self: *Self) ParserFailure!*const Expr {
         return self.equality();
@@ -232,6 +276,13 @@ pub const Parser = struct {
         return element;
     }
 
+    fn allocStmt(self: *Self, stmt: Stmt) ParserFailure!*const Stmt {
+        const element = try self.alloc.create(Stmt);
+        element.* = stmt;
+        return element;
+    }
+
+    // TODO: delete
     fn reportError(self: *Self, errorMessage: []const u8) void {
         _ = self;
         std.debug.panic("Error: {s}", .{errorMessage});

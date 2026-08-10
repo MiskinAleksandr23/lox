@@ -13,30 +13,32 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     const tokens = scanner.tokens.items;
 
     var parser: Parser = .init(tokens, alloc);
-    const expr = try parser.expression();
+    const expr = try parser.parse();
+
+    // std.debug.print("{any}", .{expr});
 
     var interpreter: Interpreter = .init(alloc);
-    const result = try interpreter.evaluate(expr);
+    try interpreter.execute(expr[0]);
 
-    switch (result) {
-        .string => |string| {
-            std.debug.print("{any} evaluated to \"{s}\"", .{
-                expr, string,
-            });
-        },
-        .boolean => |boolean| {
-            std.debug.print("{any} evaluated to \"{any}\"", .{
-                expr, boolean,
-            });
-        },
+    // switch (result) {
+    //     .string => |string| {
+    //         std.debug.print("{any} evaluated to \"{s}\"", .{
+    //             expr, string,
+    //         });
+    //     },
+    //     .boolean => |boolean| {
+    //         std.debug.print("{any} evaluated to \"{any}\"", .{
+    //             expr, boolean,
+    //         });
+    //     },
 
-        .number => |number| {
-            std.debug.print("{any} evaluated to \"{d}\"", .{
-                expr, number,
-            });
-        },
-        else => {},
-    }
+    //     .number => |number| {
+    //         std.debug.print("{any} evaluated to \"{d}\"", .{
+    //             expr, number,
+    //         });
+    //     },
+    //     else => {},
+    // }
 }
 
 pub fn runFile(io: Io, alloc: std.mem.Allocator, path: []const u8) !void {

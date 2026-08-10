@@ -8,6 +8,8 @@ const Unary = @import("expr.zig").Unary;
 const Binary = @import("expr.zig").Binary;
 const Grouping = @import("expr.zig").Grouping;
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
+const Stmt = @import("stmt.zig").Stmt;
+const PrintStmt = @import("stmt.zig").PrintStmt;
 
 pub const Interpreter = struct {
     const Self = @This();
@@ -17,6 +19,27 @@ pub const Interpreter = struct {
         return Self{
             .alloc = alloc,
         };
+    }
+
+    pub fn execute(self: *Self, stmt: *const Stmt) InterpreterFailure!void {
+        switch (stmt.*) {
+            .printStmt => |printStmt| {
+                // TODO: *Expr or by value
+                try self.executePrint(printStmt);
+            },
+            else => return InterpreterFailure.Unimplemented,
+        }
+    }
+
+    fn executePrint(self: *Self, printStmt: PrintStmt) InterpreterFailure!void {
+        const value = try self.evaluate(&printStmt.expr);
+
+        switch (value) {
+            .number => |number| std.debug.print("{d}", .{number}),
+            .string => |string| std.debug.print("{s}", .{string}),
+            .boolean => |boolean| std.debug.print("{any}", .{boolean}),
+            .nil => std.debug.print("{s}", .{"nil"}),
+        }
     }
 
     pub fn evaluate(self: *Self, expr: *const Expr) InterpreterFailure!Value {
