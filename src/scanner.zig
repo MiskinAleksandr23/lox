@@ -1,5 +1,4 @@
 const std = @import("std");
-const Io = std.Io;
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const ScanError = @import("errors.zig").ScanError;
@@ -149,7 +148,7 @@ pub const Scanner = struct {
                 if (isDigit(c)) {
                     try self.scanNumber();
                 } else if (isAlpha(c)) {
-                    try self.scanIdentifierOrKeyWord();
+                    try self.scanIdentifierOrKeyword();
                 } else {
                     const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
                     const error_line: []const u8 = if (error_pos) |pos| self.source[self.start .. self.start + pos] else "Can't show error source";
@@ -220,7 +219,7 @@ pub const Scanner = struct {
         try self.addToken(.NUMBER);
     }
 
-    fn scanIdentifierOrKeyWord(self: *Self) ScanError!void {
+    fn scanIdentifierOrKeyword(self: *Self) ScanError!void {
         while (!self.isAtEnd() and isAlphaNumeric(self.peekUnchecked())) {
             self.advanceUnchecked();
         }

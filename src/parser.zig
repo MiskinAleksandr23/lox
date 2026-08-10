@@ -216,7 +216,7 @@ pub const Parser = struct {
         self.reportError(errorMessage);
     }
 
-    fn allocExpr(self: *Self, expr: Expr) ParseError!*Expr {
+    fn allocExpr(self: *Self, expr: Expr) ParseError!*const Expr {
         const element = try self.alloc.create(Expr);
         element.* = expr;
         return element;

@@ -1,5 +1,4 @@
 const std = @import("std");
-const Io = std.Io;
 
 // https://craftinginterpreters.com/scanning.html
 pub const TokenType = enum {

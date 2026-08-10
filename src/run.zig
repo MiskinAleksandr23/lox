@@ -12,7 +12,7 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     const tokens = scanner.tokens.items;
 
     var parser: Parser = .init(tokens, alloc);
-    const expr = parser.expression();
+    const expr = try parser.expression();
 
     std.debug.print("{any}", .{expr});
 }
