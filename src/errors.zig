@@ -25,6 +25,7 @@ pub const RuntimeError = error{
     DivisionByZero,
     IntegerOverflow,
     Unimplemented, // Remove in future,
+    UnknownIdentifier,
 };
 
 pub const InterpreterFailure =

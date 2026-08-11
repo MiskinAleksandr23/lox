@@ -5,7 +5,7 @@ const Expr = @import("expr.zig").Expr;
 pub const Stmt = union(enum) {
     block: Block,
     class: Class,
-    expr: Expression,
+    expression: Expression,
     function: Function,
     ifStmt: IfStmt,
     printStmt: PrintStmt,
@@ -31,30 +31,30 @@ pub const Function = struct {
 };
 
 pub const Expression = struct {
-    expr: Expr,
+    expr: *const Expr,
 };
 
 pub const IfStmt = struct {
-    condition: Expr,
+    condition: *const Expr,
     thenBranch: *const Stmt,
     elseBranch: *const Stmt,
 };
 
 pub const PrintStmt = struct {
-    expr: Expr,
+    expr: *const Expr,
 };
 
 pub const ReturnStmt = struct {
     keyword: Token,
-    value: Expr,
+    value: *const Expr,
 };
 
 pub const VarStmt = struct {
     name: Token,
-    initializer: Expr,
+    initializer: *const Expr,
 };
 
 pub const WhileStmt = struct {
-    condition: Expr,
+    condition: *const Expr,
     body: *const Stmt,
 };

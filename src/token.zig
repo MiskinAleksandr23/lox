@@ -14,7 +14,6 @@ pub const TokenType = enum {
     SLASH,
     STAR,
 
-    // One or two character tokens.
     BANG,
     BANG_EQUAL,
     EQUAL,
@@ -24,12 +23,10 @@ pub const TokenType = enum {
     LESS,
     LESS_EQUAL,
 
-    // Literals.
     IDENTIFIER,
     STRING,
     NUMBER,
 
-    // Keywords.
     AND,
     CLASS,
     ELSE,

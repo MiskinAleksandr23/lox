@@ -60,30 +60,60 @@ pub const Parser = struct {
         return false;
     }
 
-    // program        → declaration* EOF ;
+    // TODO
+    fn matchAll(self: *Self, tokenTypes: []const TokenType) bool {
+        for (tokenTypes, 0..) |tokenType, idx| {
+            if (self.current + idx < self.tokens.len) {
+                if (self.tokens[self.current + idx].tokenType != tokenType) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        self.current += tokenTypes.len;
+        return true;
+    }
+
+    // program        → declaration* EOF
 
     // declaration    → varDecl
-    //             | statement ;
+    //                | statement
+
+    // varDecl        → "var" IDENTIFIER ( "=" expression )? ";"
 
     // statement      → exprStmt
-    //             | printStmt ;
+    //                | printStmt
 
-    // expression     → equality ;
-    // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-    // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    // term           → factor ( ( "-" | "+" ) factor )* ;
-    // factor         → unary ( ( "/" | "*" ) unary )* ;
+    // exprStmt       → expression ";"
+    // printStmt      → "print" expression ";"
+
+    // expression     → assignment
+
+    // assignment     → IDENTIFIER "=" assignment
+    //                | equality
+
+    // equality       → comparison ( ( "!=" | "==" ) comparison )*
+
+    // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )*
+
+    // term           → factor ( ( "-" | "+" ) factor )*
+
+    // factor         → unary ( ( "/" | "*" ) unary )*
+
     // unary          → ( "!" | "-" ) unary
-    //             | primary ;
-    // primary        → NUMBER | STRING | "true" | "false" | "nil"
-    //             | "(" expression ")" ;
+    //                | primary
+
+    // primary        → NUMBER | STRING | IDENTIFIER
+    //                | "true" | "false" | "nil"
+    //                | "(" expression ")"
 
     pub fn parse(self: *Self) ParserFailure![]*const Stmt {
-        var statements: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
+        var decls: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
         while (!self.isAtEnd()) {
-            try statements.append(self.alloc, try self.declaration());
+            try decls.append(self.alloc, try self.declaration());
         }
-        return statements.items;
+        return decls.items;
     }
 
     fn declaration(self: *Self) ParserFailure!*const Stmt {
@@ -97,13 +127,14 @@ pub const Parser = struct {
     fn varDeclaration(self: *Self) ParserFailure!*const Stmt {
         self.consume(.IDENTIFIER, "Expect variable name");
         const name = self.previousUnchecked();
-        _ = self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
-
+        self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
         const initializer = try self.expression();
+        self.consume(.SEMICOLON, "Expect ';' after expression");
+
         return self.allocStmt(.{
             .varStmt = .{
                 .name = name,
-                .initializer = initializer.*,
+                .initializer = initializer,
             },
         });
     }
@@ -122,25 +153,49 @@ pub const Parser = struct {
 
         return self.allocStmt(.{
             .printStmt = .{
-                .expr = expr.*,
+                .expr = expr,
             },
         });
     }
     fn expressionStatement(self: *Self) ParserFailure!*const Stmt {
         const expr = try self.expression();
+        // std.debug.print("Expr: {any}\n", .{expr});
+        // std.debug.print("CURRENT = {d}, {d}\n", .{ self.current, self.tokens.len });
         self.consume(.SEMICOLON, "Expect ';' after expression");
 
-        return try self.allocStmt(.{ .expr = .{
-            .expr = expr.*,
+        return try self.allocStmt(.{ .expression = .{
+            .expr = expr,
         } });
     }
 
     pub fn expression(self: *Self) ParserFailure!*const Expr {
-        return self.equality();
+        return try self.assignment();
+    }
+
+    // TODO: allows a = b = c ? or a + b = c
+    fn assignment(self: *Self) ParserFailure!*const Expr {
+        const expr = try self.equality();
+        // std.debug.print("ASS: {any}, {d}\n", .{ expr, self.current });
+        if (self.match(.EQUAL)) {
+            const value = try self.equality();
+            switch (expr.*) {
+                .variable => |variable| {
+                    const name = variable.name;
+                    return self.allocExpr(.{ .assign = .{
+                        .token = name,
+                        .value = value,
+                    } });
+                },
+                else => return ParserFailure.InvalidSyntax,
+            }
+        }
+        return expr;
     }
 
     fn equality(self: *Self) ParserFailure!*const Expr {
         var expr = try self.comparison();
+
+        // std.debug.print("EQU: {any}\n", .{expr});
 
         while (self.matchAny(&.{ .BANG_EQUAL, .EQUAL_EQUAL })) {
             const operator = self.previousUnchecked();
@@ -290,7 +345,10 @@ pub const Parser = struct {
         }
         return ParserFailure.InvalidSyntax;
     }
+
+    // ADD TRY
     fn consume(self: *Self, tokenType: TokenType, errorMessage: []const u8) void {
+        // std.debug.print("need {any}, got {any}\n", .{ self.peekUnchecked().tokenType, tokenType });
         if (self.match(tokenType)) {
             return;
         }

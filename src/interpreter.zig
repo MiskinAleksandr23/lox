@@ -6,9 +6,11 @@ const Value = @import("expr.zig").Value;
 const Literal = @import("expr.zig").Literal;
 const Unary = @import("expr.zig").Unary;
 const Binary = @import("expr.zig").Binary;
+const Assign = @import("expr.zig").Assign;
 const Grouping = @import("expr.zig").Grouping;
 const Variable = @import("expr.zig").Variable;
 const VarStmt = @import("stmt.zig").VarStmt;
+const Expression = @import("stmt.zig").Expression;
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 const Stmt = @import("stmt.zig").Stmt;
 const PrintStmt = @import("stmt.zig").PrintStmt;
@@ -35,18 +37,23 @@ pub const Interpreter = struct {
     fn execute(self: *Self, stmt: *const Stmt) InterpreterFailure!void {
         switch (stmt.*) {
             .printStmt => |printStmt| {
-                // TODO: *Expr or by value
                 try self.executePrint(printStmt);
             },
             .varStmt => |varStmt| {
                 try self.executeVatStmt(varStmt);
             },
+            .expression => |expression| {
+                _ = try self.evaluate(expression.expr);
+            },
             else => return InterpreterFailure.Unimplemented,
         }
     }
+    fn executeExpression(self: *Self, expression: Expression) InterpreterFailure!void {
+        try self.evaluate(expression.expr);
+    }
 
     fn executePrint(self: *Self, printStmt: PrintStmt) InterpreterFailure!void {
-        const value = try self.evaluate(&printStmt.expr);
+        const value = try self.evaluate(printStmt.expr);
 
         switch (value) {
             .number => |number| std.debug.print("{d}\n", .{number}),
@@ -56,7 +63,7 @@ pub const Interpreter = struct {
         }
     }
     fn executeVatStmt(self: *Self, varStmt: VarStmt) InterpreterFailure!void {
-        const value = try self.evaluate(&varStmt.initializer);
+        const value = try self.evaluate(varStmt.initializer);
         try self.environment.define(varStmt.name.lexeme, value);
     }
 
@@ -67,10 +74,15 @@ pub const Interpreter = struct {
             .binary => |binary| try self.evaluateBinary(binary),
             .grouping => |grouping| try self.evaluateGrouping(grouping),
             .variable => |variable| try self.evaluateVariable(variable),
+            .assign => |assing| try self.evaluateAssing(assing),
             else => return InterpreterFailure.Unimplemented,
         };
     }
 
+    fn evaluateAssing(self: *Self, assign: Assign) InterpreterFailure!Value {
+        try self.environment.define(assign.token.lexeme, try self.evaluate(assign.value));
+        return .nil;
+    }
     fn evaluateLiteral(_: *Self, literal: Literal) Value {
         return literal.value;
     }
@@ -232,6 +244,12 @@ pub const Interpreter = struct {
             .number => |number| number,
             else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operand must be a number"),
         };
+    }
+
+    fn createValue(value: anytype) Value {
+        if (@TypeOf(value) == @TypeOf(bool)) {
+            return .{ .boolean = value };
+        }
     }
 
     fn requireString(self: *Self, operator: Token, value: Value) InterpreterFailure![]const u8 {

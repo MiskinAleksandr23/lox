@@ -1,6 +1,5 @@
 const std = @import("std");
 const Value = @import("expr.zig").Value;
-// bad idea, but ok for now
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 
 pub const Environment = struct {
@@ -15,7 +14,6 @@ pub const Environment = struct {
         };
     }
 
-    // TODO: chech exists?
     pub fn define(self: *Self, name: []const u8, value: Value) InterpreterFailure!void {
         try self.values.put(name, value);
     }
@@ -24,7 +22,7 @@ pub const Environment = struct {
         if (self.values.get(name)) |value| {
             return value;
         } else {
-            return InterpreterFailure.Unimplemented;
+            return InterpreterFailure.UnknownIdentifier;
         }
     }
 };

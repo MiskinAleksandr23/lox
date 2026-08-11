@@ -12,6 +12,8 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     try scanner.scanTokens();
     const tokens = scanner.tokens.items;
 
+    // std.debug.print("Tokens: {any}\n", .{tokens});
+
     var parser: Parser = .init(tokens, alloc);
     const expr = try parser.parse();
 

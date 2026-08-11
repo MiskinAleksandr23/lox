@@ -1,5 +1,7 @@
-var a = 123
-var b = 12
-var c = a + b
+number = 123;
 
-print c;
+var addingConstant = number - 123;
+
+print addingConstant;
+
+print (number - number);
