@@ -16,6 +16,7 @@ const Stmt = @import("stmt.zig").Stmt;
 const IfStmt = @import("stmt.zig").IfStmt;
 const Block = @import("stmt.zig").Block;
 const PrintStmt = @import("stmt.zig").PrintStmt;
+const WhileStmt = @import("stmt.zig").WhileStmt;
 const Environment = @import("environment.zig").Environment;
 
 pub const Interpreter = struct {
@@ -58,8 +59,27 @@ pub const Interpreter = struct {
             .ifStmt => |ifStmt| {
                 try self.executeIfStmt(ifStmt);
             },
+            .whileStmt => |whileStmt| {
+                try self.executeWhileStmt(whileStmt);
+            },
             else => return InterpreterFailure.Unimplemented,
         }
+    }
+
+    // environment
+    fn executeWhileStmt(self: *Self, whileStmt: WhileStmt) InterpreterFailure!void {
+        while (isTruthy(try self.evaluate(whileStmt.condition))) {
+            try self.execute(whileStmt.body);
+        }
+    }
+
+    fn isTruthy(value: Value) bool {
+        return switch (value) {
+            .boolean => |boolean| boolean,
+            .number => true,
+            .string => true,
+            .nil => false,
+        };
     }
 
     fn executeIfStmt(self: *Self, ifStmt: IfStmt) InterpreterFailure!void {

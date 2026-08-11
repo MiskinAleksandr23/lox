@@ -6,6 +6,7 @@ const ParserFailure = @import("errors.zig").ParserFailure;
 const Stmt = @import("stmt.zig").Stmt;
 const Block = @import("stmt.zig").Block;
 const IfStmt = @import("stmt.zig").IfStmt;
+const WhileStmt = @import("stmt.zig").WhileStmt;
 
 pub const Parser = struct {
     const Self = @This();
@@ -88,6 +89,7 @@ pub const Parser = struct {
     //                | printStmt
     //                | blockStmt
     //                | ifStmt
+    //                | WhileStmt
 
     // ifStmt         → "if" "(" expression ")" statement
     //                  ( "else" statement )? ;
@@ -155,6 +157,8 @@ pub const Parser = struct {
             return try self.blockStmt();
         } else if (self.match(.IF)) {
             return try self.ifStmt();
+        } else if (self.match(.WHILE)) {
+            return try self.whileStmt();
         }
         return try self.expressionStatement();
     }
@@ -168,6 +172,20 @@ pub const Parser = struct {
         try self.consume(.RIGHT_BRACE, "Expect '}' after block.");
         return try self.allocStmt(.{ .block = .{
             .statements = stmts.items,
+        } });
+    }
+
+    fn whileStmt(self: *Self) ParserFailure!*const Stmt {
+        try self.consume(.LEFT_PAREN, "Expect '(' after if.");
+        const condition = try self.expression();
+
+        try self.consume(.RIGHT_PAREN, "Expect ')' after expression in if (expr)");
+
+        const body = try self.statement();
+
+        return try self.allocStmt(.{ .whileStmt = .{
+            .condition = condition,
+            .body = body,
         } });
     }
 
