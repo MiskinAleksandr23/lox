@@ -13,6 +13,7 @@ const VarStmt = @import("stmt.zig").VarStmt;
 const Expression = @import("stmt.zig").Expression;
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 const Stmt = @import("stmt.zig").Stmt;
+const IfStmt = @import("stmt.zig").IfStmt;
 const Block = @import("stmt.zig").Block;
 const PrintStmt = @import("stmt.zig").PrintStmt;
 const Environment = @import("environment.zig").Environment;
@@ -54,8 +55,34 @@ pub const Interpreter = struct {
                     environment,
                 );
             },
+            .ifStmt => |ifStmt| {
+                try self.executeIfStmt(ifStmt);
+            },
             else => return InterpreterFailure.Unimplemented,
         }
+    }
+
+    fn executeIfStmt(self: *Self, ifStmt: IfStmt) InterpreterFailure!void {
+        const environment = try self.alloc.create(Environment); // TODO
+        environment.* = .init(self.alloc);
+        var previous = self.environment;
+
+        self.environment = environment.*;
+        self.environment.enclosing = &previous;
+
+        const condValue = try self.evaluate(ifStmt.condition);
+        switch (condValue) {
+            .boolean => |boolean| {
+                if (boolean) {
+                    try self.execute(ifStmt.thenBranch);
+                } else {
+                    try self.execute(ifStmt.elseBranch);
+                }
+            },
+            else => return InterpreterFailure.Unimplemented,
+        }
+
+        self.environment = previous;
     }
 
     fn executeBlock(self: *Self, block: Block, environment: *Environment) InterpreterFailure!void {

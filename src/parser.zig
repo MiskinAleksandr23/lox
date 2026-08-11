@@ -5,6 +5,7 @@ const Expr = @import("expr.zig").Expr;
 const ParserFailure = @import("errors.zig").ParserFailure;
 const Stmt = @import("stmt.zig").Stmt;
 const Block = @import("stmt.zig").Block;
+const IfStmt = @import("stmt.zig").IfStmt;
 
 pub const Parser = struct {
     const Self = @This();
@@ -86,6 +87,10 @@ pub const Parser = struct {
     // statement      → exprStmt
     //                | printStmt
     //                | blockStmt
+    //                | ifStmt
+
+    // ifStmt         → "if" "(" expression ")" statement
+    //                  ( "else" statement )? ;
 
     // exprStmt       → expression ";"
     // printStmt      → "print" expression ";"
@@ -148,6 +153,8 @@ pub const Parser = struct {
             return try self.printStatement();
         } else if (self.match(.LEFT_BRACE)) {
             return try self.blockStmt();
+        } else if (self.match(.IF)) {
+            return try self.ifStmt();
         }
         return try self.expressionStatement();
     }
@@ -162,6 +169,26 @@ pub const Parser = struct {
         return try self.allocStmt(.{ .block = .{
             .statements = stmts.items,
         } });
+    }
+
+    // only if else exists
+    fn ifStmt(self: *Self) ParserFailure!*const Stmt {
+        try self.consume(.LEFT_PAREN, "Expect '(' after if.");
+        const expr = try self.expression();
+
+        try self.consume(.RIGHT_PAREN, "Expect ')' after expression in if (expr)");
+        const trueStmt = try self.statement();
+
+        try self.consume(.ELSE, "Expected else");
+        const falseStmt = try self.statement();
+
+        return try self.allocStmt(.{
+            .ifStmt = .{
+                .condition = expr,
+                .thenBranch = trueStmt,
+                .elseBranch = falseStmt,
+            },
+        });
     }
 
     fn printStatement(self: *Self) ParserFailure!*const Stmt {

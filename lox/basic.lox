@@ -1,15 +1,9 @@
-var a = "before";
-a = "value";
+var a = 1;
 
-a = 1;
-
-{
-    var b = 123;
-
-    print b;
-
-    var a = 11111;
-    print a;
+if (a == 2) {
+  a = 123;
+} else {
+  a = 124;
 }
 
 print a;
