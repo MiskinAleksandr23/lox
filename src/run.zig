@@ -12,33 +12,11 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     try scanner.scanTokens();
     const tokens = scanner.tokens.items;
 
-    // std.debug.print("Tokens: {any}\n", .{tokens});
-
     var parser: Parser = .init(tokens, alloc);
     const expr = try parser.parse();
 
     var interpreter: Interpreter = .init(alloc);
     try interpreter.interpret(expr);
-
-    // switch (result) {
-    //     .string => |string| {
-    //         std.debug.print("{any} evaluated to \"{s}\"", .{
-    //             expr, string,
-    //         });
-    //     },
-    //     .boolean => |boolean| {
-    //         std.debug.print("{any} evaluated to \"{any}\"", .{
-    //             expr, boolean,
-    //         });
-    //     },
-
-    //     .number => |number| {
-    //         std.debug.print("{any} evaluated to \"{d}\"", .{
-    //             expr, number,
-    //         });
-    //     },
-    //     else => {},
-    // }
 }
 
 pub fn runFile(io: Io, alloc: std.mem.Allocator, path: []const u8) !void {

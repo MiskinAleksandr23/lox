@@ -1,33 +1,32 @@
 const std = @import("std");
 
-pub const ParseError = error{
+pub const ParserError = error{
     InvalidSyntax,
     NumberLiteralOutOfRange,
 };
 
 pub const ParserFailure =
-    ParseError || std.mem.Allocator.Error;
+    ParserError || std.mem.Allocator.Error;
 
-pub const ScanError = error{
+pub const ScannerError = error{
     UnterminatedString,
     InvalidCharacter,
 };
 
-pub const ScannerError = ScanError || std.mem.Allocator.Error;
+pub const ScannerFailure = ScannerError || std.mem.Allocator.Error;
 
+pub const EnvironmentError = error{
+    UndefinedVariable,
+};
+pub const EnvironmentFailure = EnvironmentError || std.mem.Allocator.Error;
+
+// FIXME: remove Unimplemented in future
 pub const RuntimeError = error{
     InvalidOperand,
-    UndefinedVariable,
-    NotCallable,
-    ArityMismatch,
-    InvalidPropertyReceiver,
-    UndefinedProperty,
     DivisionByZero,
-    IntegerOverflow,
-    Unimplemented, // Remove in future,
-    UnknownIdentifier,
-};
+    Unimplemented,
+} || EnvironmentFailure;
 
-pub const InterpreterFailure =
-    RuntimeError ||
-    std.mem.Allocator.Error;
+pub const RuntimeFailure = RuntimeError || std.mem.Allocator.Error;
+
+pub const InterpreterFailure = RuntimeFailure;

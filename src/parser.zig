@@ -271,8 +271,6 @@ pub const Parser = struct {
     }
     fn expressionStatement(self: *Self) ParserFailure!*const Stmt {
         const expr = try self.expression();
-        // std.debug.print("Expr: {any}\n", .{expr});
-        // std.debug.print("CURRENT = {d}, {d}\n", .{ self.current, self.tokens.len });
         try self.consume(.SEMICOLON, "Expect ';' after expression");
 
         return try self.allocStmt(.{ .expression = .{
@@ -287,7 +285,6 @@ pub const Parser = struct {
     // TODO: allows a = b = c ? or a + b = c
     fn assignment(self: *Self) ParserFailure!*const Expr {
         const expr = try self.equality();
-        // std.debug.print("ASS: {any}, {d}\n", .{ expr, self.current });
         if (self.match(.EQUAL)) {
             const value = try self.equality();
             switch (expr.*) {
@@ -306,8 +303,6 @@ pub const Parser = struct {
 
     fn equality(self: *Self) ParserFailure!*const Expr {
         var expr = try self.comparison();
-
-        // std.debug.print("EQU: {any}\n", .{expr});
 
         while (self.matchAny(&.{ .BANG_EQUAL, .EQUAL_EQUAL })) {
             const operator = self.previousUnchecked();

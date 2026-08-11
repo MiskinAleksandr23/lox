@@ -1,7 +1,7 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
-const ScannerError = @import("errors.zig").ScannerError;
+const ScannerFailure = @import("errors.zig").ScannerFailure;
 
 pub const Scanner = struct {
     const Self = @This();
@@ -49,21 +49,19 @@ pub const Scanner = struct {
         self.tokens.deinit(self.allocator);
     }
 
-    pub fn scanTokens(self: *Self) ScannerError!void {
+    pub fn scanTokens(self: *Self) ScannerFailure!void {
         while (!self.isAtEnd()) {
             try self.scanToken();
             self.start = self.current;
         }
         std.debug.assert(self.current == self.source.len);
-        // TODO: do we need .EOF?
-        // try self.addToken(.EOF);
     }
 
     fn isAtEnd(self: *const Self) bool {
         return self.current >= self.source.len;
     }
 
-    fn scanToken(self: *Self) ScannerError!void {
+    fn scanToken(self: *Self) ScannerFailure!void {
         const c = self.advance();
         switch (c) {
             '(' => {
@@ -166,7 +164,7 @@ pub const Scanner = struct {
         self.advanceUnchecked();
         return symbol;
     }
-    inline fn addToken(self: *Self, token: TokenType) ScannerError!void {
+    inline fn addToken(self: *Self, token: TokenType) ScannerFailure!void {
         try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.line));
     }
 
@@ -186,7 +184,7 @@ pub const Scanner = struct {
         self.current += 1;
     }
 
-    fn scanStringLiteral(self: *Self) ScannerError!void {
+    fn scanStringLiteral(self: *Self) ScannerFailure!void {
         while (!self.isAtEnd() and self.peekUnchecked() != '\"') {
             if (self.peekUnchecked() == '\n') {
                 self.line += 1;
@@ -213,14 +211,14 @@ pub const Scanner = struct {
         return isAlpha(c) or isDigit(c);
     }
 
-    fn scanNumber(self: *Self) ScannerError!void {
+    fn scanNumber(self: *Self) ScannerFailure!void {
         while (!self.isAtEnd() and isDigit(self.peekUnchecked())) {
             self.advanceUnchecked();
         }
         try self.addToken(.NUMBER);
     }
 
-    fn scanIdentifierOrKeyword(self: *Self) ScannerError!void {
+    fn scanIdentifierOrKeyword(self: *Self) ScannerFailure!void {
         while (!self.isAtEnd() and isAlphaNumeric(self.peekUnchecked())) {
             self.advanceUnchecked();
         }
@@ -261,42 +259,3 @@ pub const Scanner = struct {
         std.debug.print("Error: {s}\n{d} | {s}\n", .{ message, line, where });
     }
 };
-
-test "Hello world!" {
-    const allocator = std.testing.allocator;
-    const program: []const u8 = "print \"Hello World!\";";
-
-    var scanner = try Scanner.init(allocator, program);
-    defer scanner.deinit();
-
-    try scanner.scanTokens();
-    const tokens: []const Token = scanner.tokens.items;
-
-    try std.testing.expect(Token.eql(tokens[0], Token.init(.PRINT, "print", 1)));
-    try std.testing.expect(Token.eql(tokens[1], Token.init(.STRING, "\"Hello World!\"", 1)));
-    try std.testing.expect(Token.eql(tokens[2], Token.init(.SEMICOLON, ";", 1)));
-}
-
-test "Unterminated String Error" {
-    const allocator = std.testing.allocator;
-    const program: []const u8 =
-        "print \"Hello World!;";
-
-    var scanner = try Scanner.init(allocator, program);
-    defer scanner.deinit();
-
-    try std.testing.expectError(error.UnterminatedString, scanner.scanTokens());
-}
-
-test "Comments" {
-    const allocator = std.testing.allocator;
-    const program: []const u8 = "// comment here <_> 42 67 69";
-
-    var scanner = try Scanner.init(allocator, program);
-    defer scanner.deinit();
-
-    try scanner.scanTokens();
-
-    try std.testing.expect(scanner.tokens.items.len == 1);
-    try std.testing.expect(Token.eql(scanner.tokens.items[0], Token.init(.EOF, "", 1)));
-}

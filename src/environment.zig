@@ -1,6 +1,6 @@
 const std = @import("std");
 const Value = @import("expr.zig").Value;
-const InterpreterFailure = @import("errors.zig").InterpreterFailure;
+const EnvironmentFailure = @import("errors.zig").EnvironmentFailure;
 
 pub const Environment = struct {
     const Self = @This();
@@ -17,43 +17,43 @@ pub const Environment = struct {
         };
     }
 
-    pub fn assign(self: *Self, name: []const u8, value: Value) InterpreterFailure!void {
+    pub fn assign(self: *Self, name: []const u8, value: Value) EnvironmentFailure!void {
         try self.assignEnvironment(name, value);
     }
 
-    pub fn define(self: *Self, name: []const u8, value: Value) InterpreterFailure!void {
+    pub fn define(self: *Self, name: []const u8, value: Value) EnvironmentFailure!void {
         try self.defineEnvironment(name, value);
     }
 
-    pub fn get(self: *Self, name: []const u8) InterpreterFailure!Value {
+    pub fn get(self: *Self, name: []const u8) EnvironmentFailure!Value {
         return self.getEnvironment(name);
     }
 
-    fn getEnvironment(self: *Self, name: []const u8) InterpreterFailure!Value {
+    fn getEnvironment(self: *Self, name: []const u8) EnvironmentFailure!Value {
         if (self.values.get(name)) |value| {
             return value;
-        } else {
-            if (self.enclosing) |en| {
-                return try en.getEnvironment(name);
-            } else {
-                return InterpreterFailure.UnknownIdentifier;
-            }
         }
+        if (self.enclosing) |enclosing| {
+            return try enclosing.getEnvironment(name);
+        }
+        return EnvironmentFailure.UndefinedVariable;
     }
 
-    fn defineEnvironment(self: *Self, name: []const u8, value: Value) InterpreterFailure!void {
-        try self.values.put(name, value); // Report exists?
-    }
-
-    fn assignEnvironment(self: *Self, name: []const u8, value: Value) InterpreterFailure!void {
+    fn defineEnvironment(self: *Self, name: []const u8, value: Value) EnvironmentFailure!void {
         if (self.values.contains(name)) {
-            try self.values.put(name, value);
-        } else {
-            if (self.enclosing) |en| {
-                return try en.assignEnvironment(name, value);
-            } else {
-                return InterpreterFailure.UnknownIdentifier;
-            }
+            std.debug.print("warning: Variable '{s}' is already declared in this scope.\n", .{name});
         }
+        try self.values.put(name, value);
+    }
+
+    fn assignEnvironment(self: *Self, name: []const u8, value: Value) EnvironmentFailure!void {
+        if (self.values.contains(name)) {
+            return try self.values.put(name, value);
+        }
+
+        if (self.enclosing) |enclosing| {
+            return try enclosing.assignEnvironment(name, value);
+        }
+        return EnvironmentFailure.UndefinedVariable;
     }
 };
