@@ -1,14 +1,6 @@
 var a = 0;
+var b = 1;
 
-while (a < 100000000) { // 10^8 
-  a = a + 1;
+for (var a = 1; a <= 10; a = a + 1) {
+  print a;
 }
-
-print a;
-
-
-// (base) near@MacBook-Pro-Alex lox % zig build -Doptimize=ReleaseFast
-// time ./zig-out/bin/lox lox/basic.lox
-// 100000000
-// ./zig-out/bin/lox lox/basic.lox  5.24s user 0.48s system 99% cpu 5.764 total
-// (base) near@MacBook-Pro-Alex lox % 

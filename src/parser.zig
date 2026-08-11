@@ -90,6 +90,7 @@ pub const Parser = struct {
     //                | blockStmt
     //                | ifStmt
     //                | WhileStmt
+    //                | ForStmt
 
     // ifStmt         → "if" "(" expression ")" statement
     //                  ( "else" statement )? ;
@@ -159,8 +160,57 @@ pub const Parser = struct {
             return try self.ifStmt();
         } else if (self.match(.WHILE)) {
             return try self.whileStmt();
+        } else if (self.match(.FOR)) {
+            return try self.forStmt();
         }
         return try self.expressionStatement();
+    }
+    // TODOODODODOD
+    fn forStmt(self: *Self) ParserFailure!*const Stmt {
+        try self.consume(.LEFT_PAREN, "Expect '(' after 'for'.");
+        try self.consume(.VAR, "Exprect var");
+        const initializer = try self.varDeclaration();
+
+        const condition = try self.expression();
+        try self.consume(.SEMICOLON, "Expect ';' after loop condition.");
+        const increment = try self.expression();
+        try self.consume(.RIGHT_PAREN, "Expect ')' after 'for'.");
+        const body = try self.statement();
+
+        const increment_stmt = try self.allocStmt(.{
+            .expression = .{
+                .expr = increment,
+            },
+        });
+
+        const body_statements = try self.alloc.dupe(
+            *const Stmt,
+            &.{ body, increment_stmt },
+        );
+
+        const body1 = try self.allocStmt(.{
+            .block = .{
+                .statements = body_statements,
+            },
+        });
+
+        const body2 = try self.allocStmt(.{
+            .whileStmt = .{
+                .condition = condition,
+                .body = body1,
+            },
+        });
+
+        const outer_statements = try self.alloc.dupe(
+            *const Stmt,
+            &.{ initializer, body2 },
+        );
+
+        return self.allocStmt(.{
+            .block = .{
+                .statements = outer_statements,
+            },
+        });
     }
 
     fn blockStmt(self: *Self) ParserFailure!*const Stmt {

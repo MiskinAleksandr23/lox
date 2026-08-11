@@ -83,13 +83,6 @@ pub const Interpreter = struct {
     }
 
     fn executeIfStmt(self: *Self, ifStmt: IfStmt) InterpreterFailure!void {
-        const environment = try self.alloc.create(Environment); // TODO
-        environment.* = .init(self.alloc);
-        var previous = self.environment;
-
-        self.environment = environment.*;
-        self.environment.enclosing = &previous;
-
         const condValue = try self.evaluate(ifStmt.condition);
         switch (condValue) {
             .boolean => |boolean| {
@@ -101,8 +94,6 @@ pub const Interpreter = struct {
             },
             else => return InterpreterFailure.Unimplemented,
         }
-
-        self.environment = previous;
     }
 
     fn executeBlock(self: *Self, block: Block, environment: *Environment) InterpreterFailure!void {
