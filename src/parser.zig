@@ -60,12 +60,13 @@ pub const Parser = struct {
         return false;
     }
 
-    // program        → statement* EOF ;
-    // statement      →   exprStmt
-    //                  | printStmt;
+    // program        → declaration* EOF ;
 
-    // exprStmt       → expression ";" ;
-    // printStmt      → "print" expression ";" ;
+    // declaration    → varDecl
+    //             | statement ;
+
+    // statement      → exprStmt
+    //             | printStmt ;
 
     // expression     → equality ;
     // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -80,10 +81,31 @@ pub const Parser = struct {
     pub fn parse(self: *Self) ParserFailure![]*const Stmt {
         var statements: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
         while (!self.isAtEnd()) {
-            try statements.append(self.alloc, try self.statement());
+            try statements.append(self.alloc, try self.declaration());
         }
-
         return statements.items;
+    }
+
+    fn declaration(self: *Self) ParserFailure!*const Stmt {
+        if (self.match(.VAR)) {
+            return try self.varDeclaration();
+        }
+        return try self.statement();
+    }
+
+    // TODO: For now variable must be always must be initialised
+    fn varDeclaration(self: *Self) ParserFailure!*const Stmt {
+        self.consume(.IDENTIFIER, "Expect variable name");
+        const name = self.previousUnchecked();
+        _ = self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
+
+        const initializer = try self.expression();
+        return self.allocStmt(.{
+            .varStmt = .{
+                .name = name,
+                .initializer = initializer.*,
+            },
+        });
     }
 
     fn statement(self: *Self) ParserFailure!*const Stmt {
@@ -259,9 +281,14 @@ pub const Parser = struct {
                     .expr = expr,
                 },
             });
-        } else {
-            return error.InvalidSyntax;
+        } else if (self.match(.IDENTIFIER)) {
+            return try self.allocExpr(.{
+                .variable = .{
+                    .name = self.previousUnchecked(),
+                },
+            });
         }
+        return ParserFailure.InvalidSyntax;
     }
     fn consume(self: *Self, tokenType: TokenType, errorMessage: []const u8) void {
         if (self.match(tokenType)) {

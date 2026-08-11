@@ -15,10 +15,8 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
     var parser: Parser = .init(tokens, alloc);
     const expr = try parser.parse();
 
-    // std.debug.print("{any}", .{expr});
-
     var interpreter: Interpreter = .init(alloc);
-    try interpreter.execute(expr[0]);
+    try interpreter.interpret(expr);
 
     // switch (result) {
     //     .string => |string| {

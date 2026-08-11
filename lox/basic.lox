@@ -1,1 +1,5 @@
-print "Hello World!";
+var a = 123
+var b = 12
+var c = a + b
+
+print c;

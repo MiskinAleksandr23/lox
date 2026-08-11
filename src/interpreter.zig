@@ -7,25 +7,39 @@ const Literal = @import("expr.zig").Literal;
 const Unary = @import("expr.zig").Unary;
 const Binary = @import("expr.zig").Binary;
 const Grouping = @import("expr.zig").Grouping;
+const Variable = @import("expr.zig").Variable;
+const VarStmt = @import("stmt.zig").VarStmt;
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 const Stmt = @import("stmt.zig").Stmt;
 const PrintStmt = @import("stmt.zig").PrintStmt;
+const Environment = @import("environment.zig").Environment;
 
 pub const Interpreter = struct {
     const Self = @This();
 
     alloc: std.mem.Allocator,
+    environment: Environment,
     pub fn init(alloc: std.mem.Allocator) Self {
         return Self{
             .alloc = alloc,
+            .environment = .init(alloc),
         };
     }
 
-    pub fn execute(self: *Self, stmt: *const Stmt) InterpreterFailure!void {
+    pub fn interpret(self: *Self, stmts: []*const Stmt) InterpreterFailure!void {
+        for (stmts) |stmt| {
+            try self.execute(stmt);
+        }
+    }
+
+    fn execute(self: *Self, stmt: *const Stmt) InterpreterFailure!void {
         switch (stmt.*) {
             .printStmt => |printStmt| {
                 // TODO: *Expr or by value
                 try self.executePrint(printStmt);
+            },
+            .varStmt => |varStmt| {
+                try self.executeVatStmt(varStmt);
             },
             else => return InterpreterFailure.Unimplemented,
         }
@@ -35,11 +49,15 @@ pub const Interpreter = struct {
         const value = try self.evaluate(&printStmt.expr);
 
         switch (value) {
-            .number => |number| std.debug.print("{d}", .{number}),
-            .string => |string| std.debug.print("{s}", .{string}),
-            .boolean => |boolean| std.debug.print("{any}", .{boolean}),
-            .nil => std.debug.print("{s}", .{"nil"}),
+            .number => |number| std.debug.print("{d}\n", .{number}),
+            .string => |string| std.debug.print("{s}\n", .{string}),
+            .boolean => |boolean| std.debug.print("{any}\n", .{boolean}),
+            .nil => std.debug.print("{s}\n", .{"nil"}),
         }
+    }
+    fn executeVatStmt(self: *Self, varStmt: VarStmt) InterpreterFailure!void {
+        const value = try self.evaluate(&varStmt.initializer);
+        try self.environment.define(varStmt.name.lexeme, value);
     }
 
     pub fn evaluate(self: *Self, expr: *const Expr) InterpreterFailure!Value {
@@ -48,6 +66,7 @@ pub const Interpreter = struct {
             .unary => |unary| try self.evaluateUnary(unary),
             .binary => |binary| try self.evaluateBinary(binary),
             .grouping => |grouping| try self.evaluateGrouping(grouping),
+            .variable => |variable| try self.evaluateVariable(variable),
             else => return InterpreterFailure.Unimplemented,
         };
     }
@@ -78,6 +97,10 @@ pub const Interpreter = struct {
         return try self.evaluate(grouping.expr);
     }
 
+    fn evaluateVariable(self: *Self, variable: Variable) InterpreterFailure!Value {
+        return try self.environment.get(variable.name.lexeme);
+    }
+
     fn evaluateBinary(self: *Self, binary: Binary) InterpreterFailure!Value {
         const left = try self.evaluate(binary.left);
         const right = try self.evaluate(binary.right);
@@ -102,7 +125,7 @@ pub const Interpreter = struct {
                     u8,
                     &.{ try self.stringify(left), rhs },
                 ) },
-                // TODO: same as l91
+                // TODO: same as l123
                 else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be numbers or strings"),
             },
             .string => |lhs| .{
