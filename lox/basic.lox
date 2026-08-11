@@ -1,7 +1,15 @@
-number = 123;
+var a = "before";
+a = "value";
 
-var addingConstant = number - 123;
+a = 1;
 
-print addingConstant;
+{
+    var b = 123;
 
-print (number - number);
+    print b;
+
+    var a = 11111;
+    print a;
+}
+
+print a;

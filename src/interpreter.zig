@@ -13,6 +13,7 @@ const VarStmt = @import("stmt.zig").VarStmt;
 const Expression = @import("stmt.zig").Expression;
 const InterpreterFailure = @import("errors.zig").InterpreterFailure;
 const Stmt = @import("stmt.zig").Stmt;
+const Block = @import("stmt.zig").Block;
 const PrintStmt = @import("stmt.zig").PrintStmt;
 const Environment = @import("environment.zig").Environment;
 
@@ -40,16 +41,36 @@ pub const Interpreter = struct {
                 try self.executePrint(printStmt);
             },
             .varStmt => |varStmt| {
-                try self.executeVatStmt(varStmt);
+                try self.executeVarStmt(varStmt);
             },
             .expression => |expression| {
-                _ = try self.evaluate(expression.expr);
+                try self.executeExpression(expression);
+            },
+            .block => |block| {
+                const environment = try self.alloc.create(Environment); // TODO
+                environment.* = .init(self.alloc);
+                try self.executeBlock(
+                    block,
+                    environment,
+                );
             },
             else => return InterpreterFailure.Unimplemented,
         }
     }
+
+    fn executeBlock(self: *Self, block: Block, environment: *Environment) InterpreterFailure!void {
+        var previous = self.environment;
+        self.environment = environment.*;
+        self.environment.enclosing = &previous;
+        for (block.statements) |stmt| {
+            try self.execute(stmt);
+        }
+
+        self.environment = previous;
+    }
+
     fn executeExpression(self: *Self, expression: Expression) InterpreterFailure!void {
-        try self.evaluate(expression.expr);
+        _ = try self.evaluate(expression.expr);
     }
 
     fn executePrint(self: *Self, printStmt: PrintStmt) InterpreterFailure!void {
@@ -62,7 +83,7 @@ pub const Interpreter = struct {
             .nil => std.debug.print("{s}\n", .{"nil"}),
         }
     }
-    fn executeVatStmt(self: *Self, varStmt: VarStmt) InterpreterFailure!void {
+    fn executeVarStmt(self: *Self, varStmt: VarStmt) InterpreterFailure!void {
         const value = try self.evaluate(varStmt.initializer);
         try self.environment.define(varStmt.name.lexeme, value);
     }
@@ -80,7 +101,7 @@ pub const Interpreter = struct {
     }
 
     fn evaluateAssing(self: *Self, assign: Assign) InterpreterFailure!Value {
-        try self.environment.define(assign.token.lexeme, try self.evaluate(assign.value));
+        try self.environment.assign(assign.token.lexeme, try self.evaluate(assign.value));
         return .nil;
     }
     fn evaluateLiteral(_: *Self, literal: Literal) Value {

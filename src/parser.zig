@@ -4,6 +4,7 @@ const TokenType = @import("token.zig").TokenType;
 const Expr = @import("expr.zig").Expr;
 const ParserFailure = @import("errors.zig").ParserFailure;
 const Stmt = @import("stmt.zig").Stmt;
+const Block = @import("stmt.zig").Block;
 
 pub const Parser = struct {
     const Self = @This();
@@ -84,9 +85,12 @@ pub const Parser = struct {
 
     // statement      → exprStmt
     //                | printStmt
+    //                | blockStmt
 
     // exprStmt       → expression ";"
     // printStmt      → "print" expression ";"
+
+    // blockStmt      → "{" declaration* "}"
 
     // expression     → assignment
 
@@ -125,11 +129,11 @@ pub const Parser = struct {
 
     // TODO: For now variable must be always must be initialised
     fn varDeclaration(self: *Self) ParserFailure!*const Stmt {
-        self.consume(.IDENTIFIER, "Expect variable name");
+        try self.consume(.IDENTIFIER, "Expect variable name");
         const name = self.previousUnchecked();
-        self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
+        try self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
         const initializer = try self.expression();
-        self.consume(.SEMICOLON, "Expect ';' after expression");
+        try self.consume(.SEMICOLON, "Expect ';' after expression");
 
         return self.allocStmt(.{
             .varStmt = .{
@@ -142,14 +146,27 @@ pub const Parser = struct {
     fn statement(self: *Self) ParserFailure!*const Stmt {
         if (self.match(.PRINT)) {
             return try self.printStatement();
+        } else if (self.match(.LEFT_BRACE)) {
+            return try self.blockStmt();
         }
-
         return try self.expressionStatement();
+    }
+
+    fn blockStmt(self: *Self) ParserFailure!*const Stmt {
+        var stmts: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
+
+        while (!self.check(.RIGHT_BRACE) and !self.isAtEnd()) {
+            try stmts.append(self.alloc, try self.declaration());
+        }
+        try self.consume(.RIGHT_BRACE, "Expect '}' after block.");
+        return try self.allocStmt(.{ .block = .{
+            .statements = stmts.items,
+        } });
     }
 
     fn printStatement(self: *Self) ParserFailure!*const Stmt {
         const expr = try self.expression();
-        self.consume(.SEMICOLON, "Expect ';' after expression");
+        try self.consume(.SEMICOLON, "Expect ';' after expression");
 
         return self.allocStmt(.{
             .printStmt = .{
@@ -161,7 +178,7 @@ pub const Parser = struct {
         const expr = try self.expression();
         // std.debug.print("Expr: {any}\n", .{expr});
         // std.debug.print("CURRENT = {d}, {d}\n", .{ self.current, self.tokens.len });
-        self.consume(.SEMICOLON, "Expect ';' after expression");
+        try self.consume(.SEMICOLON, "Expect ';' after expression");
 
         return try self.allocStmt(.{ .expression = .{
             .expr = expr,
@@ -329,7 +346,7 @@ pub const Parser = struct {
             });
         } else if (self.match(.LEFT_PAREN)) {
             const expr = try self.expression();
-            self.consume(.RIGHT_PAREN, "Expect ')' after expression.");
+            try self.consume(.RIGHT_PAREN, "Expect ')' after expression.");
 
             return try self.allocExpr(.{
                 .grouping = .{
@@ -346,13 +363,11 @@ pub const Parser = struct {
         return ParserFailure.InvalidSyntax;
     }
 
-    // ADD TRY
-    fn consume(self: *Self, tokenType: TokenType, errorMessage: []const u8) void {
-        // std.debug.print("need {any}, got {any}\n", .{ self.peekUnchecked().tokenType, tokenType });
+    fn consume(self: *Self, tokenType: TokenType, errorMessage: []const u8) ParserFailure!void {
         if (self.match(tokenType)) {
             return;
         }
-        self.reportError(errorMessage);
+        try self.reportError(errorMessage);
     }
 
     fn allocExpr(self: *Self, expr: Expr) ParserFailure!*const Expr {
@@ -368,8 +383,10 @@ pub const Parser = struct {
     }
 
     // TODO: delete
-    fn reportError(self: *Self, errorMessage: []const u8) void {
+    fn reportError(self: *Self, errorMessage: []const u8) ParserFailure!void {
         _ = self;
-        std.debug.panic("Error: {s}", .{errorMessage});
+
+        std.debug.print("Err: {s}\n", .{errorMessage});
+        return ParserFailure.InvalidSyntax;
     }
 };
