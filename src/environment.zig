@@ -1,6 +1,7 @@
 const std = @import("std");
 const Value = @import("expr.zig").Value;
 const EnvironmentFailure = @import("errors.zig").EnvironmentFailure;
+const Warn = @import("warn.zig").Warn;
 
 pub const Environment = struct {
     const Self = @This();
@@ -41,7 +42,7 @@ pub const Environment = struct {
 
     fn defineEnvironment(self: *Self, name: []const u8, value: Value) EnvironmentFailure!void {
         if (self.values.contains(name)) {
-            std.debug.print("warning: Variable '{s}' is already declared in this scope.\n", .{name});
+            Warn.warn("warning: Variable '{s}' is already declared in this scope.\n", .{name});
         }
         try self.values.put(name, value);
     }

@@ -73,12 +73,11 @@ pub const Interpreter = struct {
         }
     }
 
-    fn isTruthy(value: Value) bool {
+    inline fn isTruthy(value: Value) bool {
         return switch (value) {
             .boolean => |boolean| boolean,
-            .number => true,
-            .string => true,
             .nil => false,
+            .number, .string => true,
         };
     }
 
@@ -128,9 +127,9 @@ pub const Interpreter = struct {
 
     pub fn evaluate(self: *Self, expr: *const Expr) InterpreterFailure!Value {
         return switch (expr.*) {
+            .binary => |binary| try self.evaluateBinary(binary),
             .literal => |literal| self.evaluateLiteral(literal),
             .unary => |unary| try self.evaluateUnary(unary),
-            .binary => |binary| try self.evaluateBinary(binary),
             .grouping => |grouping| try self.evaluateGrouping(grouping),
             .variable => |variable| try self.evaluateVariable(variable),
             .assign => |assing| try self.evaluateAssing(assing),
@@ -139,8 +138,9 @@ pub const Interpreter = struct {
     }
 
     fn evaluateAssing(self: *Self, assign: Assign) InterpreterFailure!Value {
-        try self.environment.assign(assign.token.lexeme, try self.evaluate(assign.value));
-        return .nil;
+        const evaluated = try self.evaluate(assign.value);
+        try self.environment.assign(assign.token.lexeme, evaluated);
+        return evaluated;
     }
     fn evaluateLiteral(_: *Self, literal: Literal) Value {
         return literal.value;

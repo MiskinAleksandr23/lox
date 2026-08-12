@@ -4,8 +4,7 @@ const Scanner = @import("scanner.zig").Scanner;
 const Parser = @import("parser.zig").Parser;
 const Interpreter = @import("interpreter.zig").Interpreter;
 
-fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
-    _ = io;
+fn run(alloc: std.mem.Allocator, source: []const u8) !void {
     var scanner = try Scanner.init(alloc, source);
     errdefer scanner.deinit();
 
@@ -22,7 +21,7 @@ fn run(io: Io, alloc: std.mem.Allocator, source: []const u8) !void {
 pub fn runFile(io: Io, alloc: std.mem.Allocator, path: []const u8) !void {
     const cwd = std.Io.Dir.cwd();
     const contents = try cwd.readFileAlloc(io, path, alloc, .unlimited);
-    try run(io, alloc, contents);
+    try run(alloc, contents);
 }
 pub fn runPrompt(io: Io, alloc: std.mem.Allocator) !void {
     _ = io;

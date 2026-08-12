@@ -1,5 +1,13 @@
-var a = 1;
+var depth = 0;
+print depth; // 0
+{
+    var depth = 1;
+    print depth; // 1
+    {
+        var depth = 2;
+        print depth; // 2
+    }
+    print depth; // 1
+}
 
-var a = 2;
-
-print a;
+print depth; // 0
