@@ -46,6 +46,20 @@ pub const Value = union(enum) {
     boolean: bool,
     number: i64,
     string: []const u8,
+
+    pub fn from(value: anytype) Value {
+        const T = @TypeOf(value);
+
+        return switch (T) {
+            @TypeOf(null) => .nil,
+            bool => .{ .boolean = value },
+            i64 => .{ .number = value },
+            []const u8, []u8 => .{ .string = value },
+            else => @compileError(
+                "Unsupported value type " ++ @typeName(T),
+            ),
+        };
+    }
 };
 
 pub const Literal = struct {

@@ -82,16 +82,11 @@ pub const Interpreter = struct {
     }
 
     fn executeIfStmt(self: *Self, ifStmt: IfStmt) InterpreterFailure!void {
-        const condValue = try self.evaluate(ifStmt.condition);
-        switch (condValue) {
-            .boolean => |boolean| {
-                if (boolean) {
-                    try self.execute(ifStmt.thenBranch);
-                } else {
-                    try self.execute(ifStmt.elseBranch);
-                }
-            },
-            else => return InterpreterFailure.Unimplemented,
+        const value = try self.evaluate(ifStmt.condition);
+        if (isTruthy(value)) {
+            try self.execute(ifStmt.thenBranch);
+        } else {
+            try self.execute(ifStmt.elseBranch);
         }
     }
 
@@ -116,8 +111,8 @@ pub const Interpreter = struct {
         switch (value) {
             .number => |number| std.debug.print("{d}\n", .{number}),
             .string => |string| std.debug.print("{s}\n", .{string}),
-            .boolean => |boolean| std.debug.print("{any}\n", .{boolean}),
-            .nil => std.debug.print("{s}\n", .{"nil"}),
+            .boolean => |boolean| std.debug.print("{}\n", .{boolean}),
+            .nil => std.debug.print("nil\n", .{}),
         }
     }
     fn executeVarStmt(self: *Self, varStmt: VarStmt) InterpreterFailure!void {
@@ -151,15 +146,10 @@ pub const Interpreter = struct {
 
         return switch (unary.operator.tokenType) {
             .MINUS => switch (value) {
-                .number => |number| .{ .number = -number },
+                .number => |number| .from(-number),
                 else => self.failRuntime(unary.operator, InterpreterFailure.InvalidOperand, "Operand must be a number"),
             },
-            .BANG => switch (value) {
-                .number => .{ .boolean = false },
-                .nil => .{ .boolean = true },
-                .boolean => |boolean| .{ .boolean = !boolean },
-                .string => .{ .boolean = false },
-            },
+            .BANG => .from(!isTruthy(value)),
             else => unreachable,
         };
     }
@@ -179,8 +169,8 @@ pub const Interpreter = struct {
         return switch (binary.operator.tokenType) {
             .PLUS => try self.evaluatePlus(binary.operator, left, right),
             .MINUS, .STAR, .SLASH, .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL => try self.evaluateNumericBinary(binary.operator, left, right),
-            .EQUAL_EQUAL => .{ .boolean = self.equalValues(left, right) },
-            .BANG_EQUAL => .{ .boolean = !self.equalValues(left, right) },
+            .EQUAL_EQUAL => .from(self.equalValues(left, right)),
+            .BANG_EQUAL => .from(!self.equalValues(left, right)),
             else => InterpreterFailure.Unimplemented,
         };
     }
@@ -188,23 +178,18 @@ pub const Interpreter = struct {
     fn evaluatePlus(self: *Self, operator: Token, left: Value, right: Value) InterpreterFailure!Value {
         return switch (left) {
             .number => |lhs| switch (right) {
-                .number => |rhs| .{
-                    .number = lhs + rhs,
-                },
-                .string => |rhs| .{ .string = try std.mem.concat(
+                .number => |rhs| .from(lhs + rhs),
+                .string => |rhs| .from(try std.mem.concat(
                     self.alloc,
                     u8,
                     &.{ try self.stringify(left), rhs },
-                ) },
-                // TODO: same as l123
+                )),
                 else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be numbers or strings"),
             },
-            .string => |lhs| .{
-                .string = try std.mem.concat(self.alloc, u8, &.{
-                    lhs,
-                    try self.stringify(right),
-                }),
-            },
+            .string => |lhs| .from(try std.mem.concat(self.alloc, u8, &.{
+                lhs,
+                try self.stringify(right),
+            })),
             else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operands must be numbers or strings"),
         };
     }
@@ -226,35 +211,19 @@ pub const Interpreter = struct {
         const rhs = try self.requireNumber(operator, right);
 
         return switch (operator.tokenType) {
-            .PLUS => .{
-                .number = lhs + rhs,
-            },
-            .MINUS => .{
-                .number = lhs - rhs,
-            },
-            .STAR => .{
-                .number = lhs * rhs,
-            },
+            .PLUS => .from(lhs + rhs),
+            .MINUS => .from(lhs - rhs),
+            .STAR => .from(lhs * rhs),,
             .SLASH => division: {
                 if (rhs == 0) {
                     return self.failRuntime(operator, InterpreterFailure.DivisionByZero, "Division by zero");
                 }
-                break :division .{
-                    .number = @divTrunc(lhs, rhs),
-                };
+                break :division .from(@divTrunc(lhs, rhs));
             },
-            .LESS => .{
-                .boolean = lhs < rhs,
-            },
-            .GREATER => .{
-                .boolean = lhs > rhs,
-            },
-            .LESS_EQUAL => .{
-                .boolean = lhs <= rhs,
-            },
-            .GREATER_EQUAL => .{
-                .boolean = lhs >= rhs,
-            },
+            .LESS => .from(lhs < rhs),
+            .GREATER => .from(lhs > rhs),
+            .LESS_EQUAL => .from(lhs <= rhs),
+            .GREATER_EQUAL => .from(lhs >= rhs),
             else => InterpreterFailure.Unimplemented,
         };
     }
@@ -303,12 +272,6 @@ pub const Interpreter = struct {
             .number => |number| number,
             else => self.failRuntime(operator, InterpreterFailure.InvalidOperand, "Operand must be a number"),
         };
-    }
-
-    fn createValue(value: anytype) Value {
-        if (@TypeOf(value) == @TypeOf(bool)) {
-            return .{ .boolean = value };
-        }
     }
 
     fn requireString(self: *Self, operator: Token, value: Value) InterpreterFailure![]const u8 {
