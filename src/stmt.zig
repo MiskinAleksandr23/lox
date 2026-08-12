@@ -15,7 +15,7 @@ pub const Stmt = union(enum) {
 };
 
 pub const Block = struct {
-    statements: []*const Stmt,
+    statements: []const *const Stmt,
 };
 
 pub const Class = struct {
@@ -27,7 +27,7 @@ pub const Class = struct {
 pub const Function = struct {
     name: Token,
     params: []const Token,
-    body: []*const Stmt,
+    body: []const *const Stmt,
 };
 
 pub const Expression = struct {
@@ -37,7 +37,7 @@ pub const Expression = struct {
 pub const IfStmt = struct {
     condition: *const Expr,
     thenBranch: *const Stmt,
-    elseBranch: *const Stmt,
+    elseBranch: ?*const Stmt,
 };
 
 pub const PrintStmt = struct {

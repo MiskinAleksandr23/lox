@@ -29,7 +29,7 @@ pub const Binary = struct {
 pub const Call = struct {
     callee: *const Expr,
     paren: Token,
-    arguments: []*const Expr,
+    arguments: []const *const Expr,
 };
 
 pub const Get = struct {
@@ -80,7 +80,7 @@ pub const Set = struct {
 
 pub const Super = struct {
     keyword: Token,
-    nethod: Token,
+    method: Token,
 };
 
 pub const This = struct {

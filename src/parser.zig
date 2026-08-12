@@ -1,8 +1,10 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
+const Reporter = @import("diagnostic.zig").Reporter;
 const Expr = @import("expr.zig").Expr;
 const ParserFailure = @import("errors.zig").ParserFailure;
+const ParserError = @import("errors.zig").ParserError;
 const Stmt = @import("stmt.zig").Stmt;
 const Block = @import("stmt.zig").Block;
 const IfStmt = @import("stmt.zig").IfStmt;
@@ -13,16 +15,21 @@ pub const Parser = struct {
 
     alloc: std.mem.Allocator,
     tokens: []const Token,
+    reporter: *Reporter,
     current: usize = 0,
+    recursion_depth: usize = 0,
 
-    pub fn init(tokens: []const Token, alloc: std.mem.Allocator) Self {
+    const max_recursion_depth = 512;
+
+    pub fn init(tokens: []const Token, alloc: std.mem.Allocator, reporter: *Reporter) Self {
         return Self{
             .alloc = alloc,
             .tokens = tokens,
+            .reporter = reporter,
         };
     }
 
-    inline fn advanceUnckecked(self: *Self) void {
+    inline fn advanceUnchecked(self: *Self) void {
         self.current += 1;
     }
 
@@ -44,7 +51,7 @@ pub const Parser = struct {
 
     fn match(self: *Self, tokenType: TokenType) bool {
         if (self.check(tokenType)) {
-            self.advanceUnckecked();
+            self.advanceUnchecked();
             return true;
         }
         return false;
@@ -63,7 +70,6 @@ pub const Parser = struct {
         return false;
     }
 
-    // TODO
     fn matchAll(self: *Self, tokenTypes: []const TokenType) bool {
         for (tokenTypes, 0..) |tokenType, idx| {
             if (self.current + idx < self.tokens.len) {
@@ -78,7 +84,7 @@ pub const Parser = struct {
         return true;
     }
 
-    // program        → declaration* EOF
+    // program        → declaration*
 
     // declaration    → varDecl
     //                | statement
@@ -89,11 +95,16 @@ pub const Parser = struct {
     //                | printStmt
     //                | blockStmt
     //                | ifStmt
-    //                | WhileStmt
-    //                | ForStmt
+    //                | whileStmt
+    //                | forStmt
 
     // ifStmt         → "if" "(" expression ")" statement
-    //                  ( "else" statement )? ;
+    //                  ( "else" statement )?
+
+    // whileStmt      → "while" "(" expression ")" statement
+
+    // forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
+    //                  expression? ";" expression? ")" statement
 
     // exprStmt       → expression ";"
     // printStmt      → "print" expression ";"
@@ -120,8 +131,8 @@ pub const Parser = struct {
     //                | "true" | "false" | "nil"
     //                | "(" expression ")"
 
-    pub fn parse(self: *Self) ParserFailure![]*const Stmt {
-        var decls: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
+    pub fn parse(self: *Self) ParserFailure![]const *const Stmt {
+        var decls: std.ArrayList(*const Stmt) = .empty;
         while (!self.isAtEnd()) {
             try decls.append(self.alloc, try self.declaration());
         }
@@ -135,13 +146,16 @@ pub const Parser = struct {
         return try self.statement();
     }
 
-    // TODO: For now variable must be always must be initialised
     fn varDeclaration(self: *Self) ParserFailure!*const Stmt {
-        try self.consume(.IDENTIFIER, "Expect variable name");
+        try self.consume(.IDENTIFIER, "Expect variable name.");
         const name = self.previousUnchecked();
-        try self.consume(.EQUAL, "Exprected '='. Varible must be initialized");
-        const initializer = try self.expression();
-        try self.consume(.SEMICOLON, "Expect ';' after expression");
+
+        const initializer = if (self.match(.EQUAL))
+            try self.expression()
+        else
+            try self.allocExpr(.{ .literal = .{ .value = .nil } });
+
+        try self.consume(.SEMICOLON, "Expect ';' after variable declaration.");
 
         return self.allocStmt(.{
             .varStmt = .{
@@ -152,6 +166,9 @@ pub const Parser = struct {
     }
 
     fn statement(self: *Self) ParserFailure!*const Stmt {
+        try self.enterRecursiveRule();
+        defer self.leaveRecursiveRule();
+
         if (self.match(.PRINT)) {
             return try self.printStatement();
         } else if (self.match(.LEFT_BRACE)) {
@@ -165,56 +182,65 @@ pub const Parser = struct {
         }
         return try self.expressionStatement();
     }
-    // TODOODODODOD
     fn forStmt(self: *Self) ParserFailure!*const Stmt {
         try self.consume(.LEFT_PAREN, "Expect '(' after 'for'.");
-        try self.consume(.VAR, "Exprect var");
-        const initializer = try self.varDeclaration();
 
-        const condition = try self.expression();
+        const initializer: ?*const Stmt = if (self.match(.SEMICOLON))
+            null
+        else if (self.match(.VAR))
+            try self.varDeclaration()
+        else
+            try self.expressionStatement();
+
+        const condition = if (!self.check(.SEMICOLON))
+            try self.expression()
+        else
+            try self.allocExpr(.{ .literal = .{ .value = .{ .boolean = true } } });
         try self.consume(.SEMICOLON, "Expect ';' after loop condition.");
-        const increment = try self.expression();
-        try self.consume(.RIGHT_PAREN, "Expect ')' after 'for'.");
-        const body = try self.statement();
 
-        const increment_stmt = try self.allocStmt(.{
-            .expression = .{
-                .expr = increment,
-            },
-        });
+        const increment: ?*const Expr = if (!self.check(.RIGHT_PAREN))
+            try self.expression()
+        else
+            null;
+        try self.consume(.RIGHT_PAREN, "Expect ')' after for clauses.");
 
-        const body_statements = try self.alloc.dupe(
-            *const Stmt,
-            &.{ body, increment_stmt },
-        );
+        var body = try self.statement();
 
-        const body1 = try self.allocStmt(.{
-            .block = .{
-                .statements = body_statements,
-            },
-        });
+        if (increment) |increment_expr| {
+            const increment_stmt = try self.allocStmt(.{
+                .expression = .{ .expr = increment_expr },
+            });
+            const statements = try self.alloc.dupe(
+                *const Stmt,
+                &.{ body, increment_stmt },
+            );
+            body = try self.allocStmt(.{
+                .block = .{ .statements = statements },
+            });
+        }
 
-        const body2 = try self.allocStmt(.{
+        body = try self.allocStmt(.{
             .whileStmt = .{
                 .condition = condition,
-                .body = body1,
+                .body = body,
             },
         });
 
-        const outer_statements = try self.alloc.dupe(
-            *const Stmt,
-            &.{ initializer, body2 },
-        );
+        if (initializer) |initializer_stmt| {
+            const statements = try self.alloc.dupe(
+                *const Stmt,
+                &.{ initializer_stmt, body },
+            );
+            body = try self.allocStmt(.{
+                .block = .{ .statements = statements },
+            });
+        }
 
-        return self.allocStmt(.{
-            .block = .{
-                .statements = outer_statements,
-            },
-        });
+        return body;
     }
 
     fn blockStmt(self: *Self) ParserFailure!*const Stmt {
-        var stmts: std.ArrayList(*const Stmt) = try .initCapacity(self.alloc, 42);
+        var stmts: std.ArrayList(*const Stmt) = .empty;
 
         while (!self.check(.RIGHT_BRACE) and !self.isAtEnd()) {
             try stmts.append(self.alloc, try self.declaration());
@@ -226,10 +252,10 @@ pub const Parser = struct {
     }
 
     fn whileStmt(self: *Self) ParserFailure!*const Stmt {
-        try self.consume(.LEFT_PAREN, "Expect '(' after if.");
+        try self.consume(.LEFT_PAREN, "Expect '(' after 'while'.");
         const condition = try self.expression();
 
-        try self.consume(.RIGHT_PAREN, "Expect ')' after expression in if (expr)");
+        try self.consume(.RIGHT_PAREN, "Expect ')' after while condition.");
 
         const body = try self.statement();
 
@@ -239,16 +265,17 @@ pub const Parser = struct {
         } });
     }
 
-    // only if else exists
     fn ifStmt(self: *Self) ParserFailure!*const Stmt {
-        try self.consume(.LEFT_PAREN, "Expect '(' after if.");
+        try self.consume(.LEFT_PAREN, "Expect '(' after 'if'.");
         const expr = try self.expression();
 
-        try self.consume(.RIGHT_PAREN, "Expect ')' after expression in if (expr)");
+        try self.consume(.RIGHT_PAREN, "Expect ')' after if condition.");
         const trueStmt = try self.statement();
 
-        try self.consume(.ELSE, "Expected else");
-        const falseStmt = try self.statement();
+        const falseStmt = if (self.match(.ELSE))
+            try self.statement()
+        else
+            null;
 
         return try self.allocStmt(.{
             .ifStmt = .{
@@ -282,11 +309,14 @@ pub const Parser = struct {
         return try self.assignment();
     }
 
-    // TODO: allows a = b = c ? or a + b = c
     fn assignment(self: *Self) ParserFailure!*const Expr {
+        try self.enterRecursiveRule();
+        defer self.leaveRecursiveRule();
+
         const expr = try self.equality();
         if (self.match(.EQUAL)) {
-            const value = try self.equality();
+            const equals = self.previousUnchecked();
+            const value = try self.assignment();
             switch (expr.*) {
                 .variable => |variable| {
                     const name = variable.name;
@@ -295,7 +325,11 @@ pub const Parser = struct {
                         .value = value,
                     } });
                 },
-                else => return ParserFailure.InvalidSyntax,
+                else => return self.failAt(
+                    equals,
+                    error.InvalidSyntax,
+                    "Invalid assignment target.",
+                ),
             }
         }
         return expr;
@@ -376,6 +410,9 @@ pub const Parser = struct {
     }
 
     fn unary(self: *Self) ParserFailure!*const Expr {
+        try self.enterRecursiveRule();
+        defer self.leaveRecursiveRule();
+
         if (self.matchAny(&.{ .BANG, .MINUS })) {
             const operator = self.previousUnchecked();
             const right = try self.unary();
@@ -415,14 +452,18 @@ pub const Parser = struct {
                 },
             });
         } else if (self.match(.NUMBER)) {
+            const token = self.previousUnchecked();
+            const number = std.fmt.parseInt(i64, token.lexeme, 10) catch |err| switch (err) {
+                error.Overflow => return self.failAt(
+                    token,
+                    error.NumberLiteralOutOfRange,
+                    "Number literal is outside the i64 range.",
+                ),
+                error.InvalidCharacter => unreachable,
+            };
             return try self.allocExpr(.{
                 .literal = .{
-                    .value = .{
-                        .number = std.fmt.parseInt(i64, self.previousUnchecked().lexeme, 10) catch |err| switch (err) {
-                            error.Overflow => return ParserFailure.NumberLiteralOutOfRange,
-                            error.InvalidCharacter => unreachable,
-                        },
-                    },
+                    .value = .from(number),
                 },
             });
         } else if (self.match(.STRING)) {
@@ -450,14 +491,17 @@ pub const Parser = struct {
                 },
             });
         }
-        return ParserFailure.InvalidSyntax;
+        return self.failAtCurrent(
+            error.InvalidSyntax,
+            "Expect expression.",
+        );
     }
 
     fn consume(self: *Self, tokenType: TokenType, errorMessage: []const u8) ParserFailure!void {
         if (self.match(tokenType)) {
             return;
         }
-        try self.reportError(errorMessage);
+        return self.failAtCurrent(error.InvalidSyntax, errorMessage);
     }
 
     fn allocExpr(self: *Self, expr: Expr) ParserFailure!*const Expr {
@@ -472,11 +516,50 @@ pub const Parser = struct {
         return element;
     }
 
-    // TODO: delete
-    fn reportError(self: *Self, errorMessage: []const u8) ParserFailure!void {
-        _ = self;
+    fn enterRecursiveRule(self: *Self) ParserError!void {
+        if (self.recursion_depth >= max_recursion_depth) {
+            return self.failAtCurrent(
+                error.NestingTooDeep,
+                "Maximum nesting depth exceeded.",
+            );
+        }
+        self.recursion_depth += 1;
+    }
 
-        std.debug.print("Err: {s}\n", .{errorMessage});
-        return ParserFailure.InvalidSyntax;
+    fn leaveRecursiveRule(self: *Self) void {
+        std.debug.assert(self.recursion_depth > 0);
+        self.recursion_depth -= 1;
+    }
+
+    fn failAtCurrent(self: *Self, kind: ParserError, message: []const u8) ParserError {
+        if (!self.isAtEnd()) {
+            return self.failAt(self.peekUnchecked(), kind, message);
+        }
+
+        const line = if (self.tokens.len == 0)
+            1
+        else
+            self.tokens[self.tokens.len - 1].line;
+
+        self.reporter.report(.{
+            .stage = .parser,
+            .kind = kind,
+            .line = line,
+            .lexeme = "",
+            .at_end = true,
+            .message = message,
+        });
+        return kind;
+    }
+
+    fn failAt(self: *Self, token: Token, kind: ParserError, message: []const u8) ParserError {
+        self.reporter.report(.{
+            .stage = .parser,
+            .kind = kind,
+            .line = token.line,
+            .lexeme = token.lexeme,
+            .message = message,
+        });
+        return kind;
     }
 };

@@ -1,7 +1,9 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
+const Reporter = @import("diagnostic.zig").Reporter;
 const ScannerFailure = @import("errors.zig").ScannerFailure;
+const ScannerError = @import("errors.zig").ScannerError;
 
 pub const Scanner = struct {
     const Self = @This();
@@ -10,18 +12,21 @@ pub const Scanner = struct {
     tokens: std.ArrayList(Token),
 
     allocator: std.mem.Allocator,
+    reporter: *Reporter,
 
     start: usize = 0,
+    start_line: usize = 1,
     current: usize = 0,
     line: usize = 1,
 
     identMap: std.StaticStringMap(TokenType),
 
-    pub fn init(alloc: std.mem.Allocator, source: []const u8) !Self {
+    pub fn init(alloc: std.mem.Allocator, source: []const u8, reporter: *Reporter) std.mem.Allocator.Error!Self {
         return Self{
             .source = source,
             .tokens = try .initCapacity(alloc, 42),
             .allocator = alloc,
+            .reporter = reporter,
             .identMap = .initComptime(
                 .{
                     .{ "and", .AND },
@@ -51,8 +56,9 @@ pub const Scanner = struct {
 
     pub fn scanTokens(self: *Self) ScannerFailure!void {
         while (!self.isAtEnd()) {
-            try self.scanToken();
             self.start = self.current;
+            self.start_line = self.line;
+            try self.scanToken();
         }
         std.debug.assert(self.current == self.source.len);
     }
@@ -149,9 +155,12 @@ pub const Scanner = struct {
                 } else if (isAlpha(c)) {
                     try self.scanIdentifierOrKeyword();
                 } else {
-                    const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
-                    const error_line: []const u8 = if (error_pos) |pos| self.source[self.start .. self.start + pos] else "Can't show error source";
-                    return failRuntime(self.line, ScannerFailure.InvalidCharacter, error_line, "Unexpected token");
+                    return self.failScanner(
+                        error.InvalidCharacter,
+                        self.line,
+                        self.source[self.start..self.current],
+                        "Unexpected character.",
+                    );
                 }
             },
         }
@@ -164,7 +173,7 @@ pub const Scanner = struct {
         return symbol;
     }
     inline fn addToken(self: *Self, token: TokenType) ScannerFailure!void {
-        try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.line));
+        try self.tokens.append(self.allocator, Token.init(token, self.source[self.start..self.current], self.start_line));
     }
 
     fn peek(self: *Self) u8 {
@@ -192,7 +201,12 @@ pub const Scanner = struct {
         }
         if (self.isAtEnd()) {
             @branchHint(.unlikely);
-            return error.UnterminatedString;
+            return self.failScanner(
+                error.UnterminatedString,
+                self.start_line,
+                self.source[self.start..self.current],
+                "Unterminated string.",
+            );
         }
         self.advanceUnchecked();
         try self.addToken(.STRING);
@@ -254,8 +268,14 @@ pub const Scanner = struct {
         return false;
     }
 
-    fn failRuntime(line: usize, err: ScannerFailure, where: []const u8, message: []const u8) ScannerFailure {
-        std.debug.print("Error: {s}\n{d} | {s}\n", .{ message, line, where });
-        return err;
+    fn failScanner(self: *Self, kind: ScannerError, line: usize, lexeme: []const u8, message: []const u8) ScannerError {
+        self.reporter.report(.{
+            .stage = .scanner,
+            .kind = kind,
+            .line = line,
+            .lexeme = lexeme,
+            .message = message,
+        });
+        return kind;
     }
 };
