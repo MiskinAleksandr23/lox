@@ -151,8 +151,7 @@ pub const Scanner = struct {
                 } else {
                     const error_pos = std.mem.indexOfScalar(u8, self.source[self.start..], '\n');
                     const error_line: []const u8 = if (error_pos) |pos| self.source[self.start .. self.start + pos] else "Can't show error source";
-                    reportError(self.line, error_line, "Unexpected token");
-                    return error.InvalidCharacter;
+                    return failRuntime(self.line, ScannerFailure.InvalidCharacter, error_line, "Unexpected token");
                 }
             },
         }
@@ -255,7 +254,8 @@ pub const Scanner = struct {
         return false;
     }
 
-    fn reportError(line: usize, where: []const u8, message: []const u8) void {
+    fn failRuntime(line: usize, err: ScannerFailure, where: []const u8, message: []const u8) ScannerFailure {
         std.debug.print("Error: {s}\n{d} | {s}\n", .{ message, line, where });
+        return err;
     }
 };
